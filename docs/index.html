@@ -7,22 +7,35 @@
     <title>macfuseGui - Elegant SSHFS Management for macOS</title>
     <meta name="description"
         content="A premium, native-feeling macOS menu bar app for managing SSHFS mounts. Secure, reliable, and designed for Apple Silicon.">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#123677">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#071330">
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="shortcut icon" href="assets/favicon/favicon.ico">
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://ripplethor.github.io/macfuseGui/">
+    <meta property="og:url" content="https://www.macfusegui.app/">
     <meta property="og:title" content="macfuseGui - Elegant SSHFS for macOS">
     <meta property="og:description"
         content="Secure, reliable remote filesystem mounting. Built for Apple Silicon. Manage multiple connections with a native menu bar experience.">
-    <!-- <meta property="og:image" content="https://ripplethor.github.io/macfuseGui/assets/og-image.png"> -->
+    <meta property="og:image" content="https://www.macfusegui.app/assets/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/png">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://ripplethor.github.io/macfuseGui/">
+    <meta property="twitter:url" content="https://www.macfusegui.app/">
     <meta property="twitter:title" content="macfuseGui - Elegant SSHFS for macOS">
     <meta property="twitter:description"
         content="Secure, reliable remote filesystem mounting. Built for Apple Silicon.">
-    <!-- <meta property="twitter:image" content="https://ripplethor.github.io/macfuseGui/assets/og-image.png"> -->
+    <meta property="twitter:image" content="https://www.macfusegui.app/assets/og-image.png">
+    <meta property="twitter:image:alt" content="macfuseGui app icon and tagline on a dark nebula background">
 
     <!-- Structured Data -->
     <script type="application/ld+json">
@@ -129,14 +142,8 @@
             <div class="flex justify-between items-center h-20">
                 <!-- Logo -->
                 <div class="flex items-center space-x-3 group cursor-default">
-                    <div
-                        class="relative w-8 h-8 flex items-center justify-center bg-gray-900 rounded-lg border border-white/20 shadow-lg group-hover:scale-110 transition-transform duration-300 overflow-hidden">
-                        <div class="absolute inset-0 bg-gradient-to-tr from-blue-600 to-purple-600 opacity-50"></div>
-                        <svg class="w-5 h-5 text-white relative z-10" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                        </svg>
+                    <div class="relative w-9 h-9 rounded-xl ring-1 ring-white/25 shadow-[0_8px_20px_rgba(8,25,66,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
+                        <img src="assets/favicon/apple-touch-icon.png" alt="" class="w-full h-full object-cover" />
                     </div>
                     <span class="font-bold text-xl tracking-tight text-gray-900 dark:text-white">macfuse<span
                             class="text-blue-600 dark:text-blue-400">Gui</span></span>
