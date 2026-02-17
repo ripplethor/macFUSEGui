@@ -57,7 +57,7 @@ function setupLinks() {
     }
 
     // Wire up footer GitHub link if present
-    const footerGithub = document.querySelector('footer a[href="#"]');
+    const footerGithub = document.getElementById('footer-github-btn');
     if (footerGithub) {
         footerGithub.href = `https://github.com/${REPO}`;
     }
