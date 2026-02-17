@@ -488,13 +488,11 @@ body {
 /* Scroll Reveal */
 .reveal-on-scroll {
     opacity: 0;
-    transform: translate3d(0, 28px, 0) scale(0.985);
-    filter: blur(6px);
+    transform: translate3d(0, 22px, 0) scale(0.992);
     transition:
-        opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
-        transform 760ms cubic-bezier(0.16, 1, 0.3, 1),
-        filter 760ms cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: opacity, transform, filter;
+        opacity 440ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 640ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -509,26 +507,24 @@ body {
         transition: none;
         opacity: 1;
         transform: none;
-        filter: none;
     }
 }
 
 .reveal-visible {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
-    filter: blur(0);
 }
 
 .delay-100 {
-    transition-delay: 80ms;
+    transition-delay: 70ms;
 }
 
 .delay-200 {
-    transition-delay: 160ms;
+    transition-delay: 140ms;
 }
 
 .delay-300 {
-    transition-delay: 240ms;
+    transition-delay: 210ms;
 }
 
 /* Focus Accessibility */

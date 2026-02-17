@@ -134,28 +134,28 @@ function setupScrollObserver() {
 
     const observerOptions = {
         root: null,
-        // Reveal just before entering viewport to feel responsive.
-        rootMargin: '0px 0px 12% 0px',
-        threshold: 0.03
+        // Trigger earlier so content feels responsive while scrolling.
+        rootMargin: '0px 0px 24% 0px',
+        threshold: [0, 0.06]
     };
 
-    const observer = new IntersectionObserver((entries, observer) => {
+    const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('reveal-visible');
-                observer.unobserve(entry.target); // Only animate once
+            const target = entry.target;
+            const isFullyOutOfView =
+                entry.boundingClientRect.bottom < 0 ||
+                entry.boundingClientRect.top > window.innerHeight;
+
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.02) {
+                target.classList.add('reveal-visible');
+            } else if (isFullyOutOfView) {
+                // Reset once fully off-screen so animation replays when revisiting sections.
+                target.classList.remove('reveal-visible');
             }
         });
     }, observerOptions);
 
-    hiddenElements.forEach((el) => {
-        const rect = el.getBoundingClientRect();
-        if (rect.top < window.innerHeight * 0.82) {
-            el.classList.add('reveal-visible');
-            return;
-        }
-        observer.observe(el);
-    });
+    hiddenElements.forEach((el) => observer.observe(el));
 }
 
 // Hero Animation (Typewriter)
