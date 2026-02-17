@@ -11,10 +11,25 @@ DERIVED_DATA="$ROOT_DIR/build/DerivedData"
 OUTPUT_DIR="$ROOT_DIR/build"
 OUTPUT_APP="$OUTPUT_DIR/macfuseGui.app"
 
+normalize_arch() {
+  case "$1" in
+    arm64|aarch64) echo "arm64" ;;
+    x86_64|amd64) echo "x86_64" ;;
+    all|universal) echo "universal" ;;
+    *)
+      echo "Unsupported ARCH_OVERRIDE value: $1 (expected arm64, x86_64, or universal)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+ARCH_OVERRIDE="$(normalize_arch "$ARCH_OVERRIDE")"
+
 mkdir -p "$OUTPUT_DIR"
 rm -rf "$OUTPUT_APP"
 
-"$ROOT_DIR/scripts/build_libssh2.sh"
+# Keep libssh2/OpenSSL build target in lock-step with the Xcode build arch.
+ARCH_OVERRIDE="$ARCH_OVERRIDE" "$ROOT_DIR/scripts/build_libssh2.sh"
 
 XCODEBUILD_ARGS=(
   -project "$PROJECT_PATH"
@@ -25,9 +40,16 @@ XCODEBUILD_ARGS=(
   build
 )
 
-if [[ -n "$ARCH_OVERRIDE" ]]; then
-  XCODEBUILD_ARGS+=( -destination "platform=macOS,arch=$ARCH_OVERRIDE" )
-fi
+case "$ARCH_OVERRIDE" in
+  arm64|x86_64)
+    XCODEBUILD_ARGS+=( ARCHS="$ARCH_OVERRIDE" ONLY_ACTIVE_ARCH=YES )
+    XCODEBUILD_ARGS+=( -destination "platform=macOS,arch=$ARCH_OVERRIDE" )
+    ;;
+  universal)
+    XCODEBUILD_ARGS+=( ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO )
+    XCODEBUILD_ARGS+=( -destination "generic/platform=macOS" )
+    ;;
+esac
 
 xcodebuild "${XCODEBUILD_ARGS[@]}"
 
