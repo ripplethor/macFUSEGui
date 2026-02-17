@@ -267,12 +267,15 @@ main() {
     echo "[dry-run] Would create/update GitHub release and upload: $DMG_PATH"
   else
     [[ -d "$resolved_app_bundle_path" ]] || die "App bundle not found at: $resolved_app_bundle_path"
-    local app_mtime
-    local head_time
-    app_mtime="$(bundle_newest_mtime "$resolved_app_bundle_path")"
-    head_time="$(git log -1 --format=%ct)"
-    if [[ "$app_mtime" -lt "$head_time" ]]; then
-      die "App bundle payload looks older than HEAD commit. Rebuild or set SKIP_BUILD=0."
+    # Staleness guard is only meaningful when reusing an existing build.
+    if [[ "$SKIP_BUILD" == "1" ]]; then
+      local app_mtime
+      local head_time
+      app_mtime="$(bundle_newest_mtime "$resolved_app_bundle_path")"
+      head_time="$(git log -1 --format=%ct)"
+      if [[ "$app_mtime" -lt "$head_time" ]]; then
+        die "App bundle payload looks older than HEAD commit. Rebuild or set SKIP_BUILD=0."
+      fi
     fi
 
     echo "Using app bundle: $resolved_app_bundle_path"
