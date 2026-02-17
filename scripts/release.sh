@@ -121,6 +121,24 @@ require_clean_tree() {
   [[ -z "$status" ]] || die "Working tree is not clean. Commit/stash changes before releasing."
 }
 
+bundle_newest_mtime() {
+  local bundle_path="$1"
+  local newest=""
+
+  newest="$(find "$bundle_path" -type f -print0 2>/dev/null \
+    | xargs -0 stat -f %m 2>/dev/null \
+    | sort -nr \
+    | head -n 1 || true)"
+
+  if [[ -n "$newest" ]]; then
+    echo "$newest"
+    return
+  fi
+
+  # Fallback for unexpected empty bundles.
+  stat -f %m "$bundle_path"
+}
+
 main() {
   require_cmd git
   require_cmd sed
@@ -251,10 +269,10 @@ main() {
     [[ -d "$resolved_app_bundle_path" ]] || die "App bundle not found at: $resolved_app_bundle_path"
     local app_mtime
     local head_time
-    app_mtime="$(stat -f %m "$resolved_app_bundle_path")"
+    app_mtime="$(bundle_newest_mtime "$resolved_app_bundle_path")"
     head_time="$(git log -1 --format=%ct)"
     if [[ "$app_mtime" -lt "$head_time" ]]; then
-      die "App bundle looks older than HEAD commit. Rebuild or set SKIP_BUILD=0."
+      die "App bundle payload looks older than HEAD commit. Rebuild or set SKIP_BUILD=0."
     fi
 
     echo "Using app bundle: $resolved_app_bundle_path"
