@@ -1,0 +1,38 @@
+{
+  "id": "vscode",
+  "displayName": "VS Code",
+  "priority": 10,
+  "defaultEnabled": true,
+  "launchAttempts": [
+    {
+      "label": "open bundle com.microsoft.VSCode",
+      "executable": "/usr/bin/open",
+      "arguments": ["-b", "com.microsoft.VSCode", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "open bundle com.microsoft.VSCodeInsiders",
+      "executable": "/usr/bin/open",
+      "arguments": ["-b", "com.microsoft.VSCodeInsiders", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "open app Visual Studio Code",
+      "executable": "/usr/bin/open",
+      "arguments": ["-a", "Visual Studio Code", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "open app Visual Studio Code - Insiders",
+      "executable": "/usr/bin/open",
+      "arguments": ["-a", "Visual Studio Code - Insiders", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "code --reuse-window",
+      "executable": "/usr/bin/env",
+      "arguments": ["code", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 3
+    }
+  ]
+}

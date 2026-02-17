@@ -193,7 +193,9 @@ final class RemotesViewModel: ObservableObject {
     private var recoveryTimer: Timer?
     private var lastPeriodicRecoveryProbeAt: Date = .distantPast
     private var lastSleepSkipLogAt: Date = .distantPast
+    private var lastWakePreflightSkipLogAt: Date = .distantPast
     private var recoveryBurstTask: Task<Void, Never>?
+    private var wakePreflightInProgress = false
     private var workspaceObservers: [NSObjectProtocol] = []
     private var networkMonitor: NWPathMonitor?
     private var networkReachable: Bool = true
@@ -1496,6 +1498,7 @@ final class RemotesViewModel: ObservableObject {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func handleSystemWillSleep() {
         systemSleeping = true
+        wakePreflightInProgress = false
         wakeAnimationUntil = nil
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
@@ -1515,12 +1518,19 @@ final class RemotesViewModel: ObservableObject {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func handleSystemDidWake() {
         systemSleeping = false
+        wakePreflightInProgress = true
         wakeAnimationUntil = Date().addingTimeInterval(20)
         beginRecoveryIndicator(reason: "wake")
+        refreshRecoveryIndicator()
         diagnostics.append(level: .info, category: "recovery", message: "System woke up. Running staged recovery passes.")
         Task { @MainActor [weak self] in
             guard let self else {
                 return
+            }
+            defer {
+                self.wakePreflightInProgress = false
+                self.lastWakePreflightSkipLogAt = .distantPast
+                self.refreshRecoveryIndicator()
             }
             await self.performWakePreflightCleanup()
             self.scheduleRecoveryBurst(trigger: "wake", delaySeconds: [0, 1, 3, 8])
@@ -1585,6 +1595,14 @@ final class RemotesViewModel: ObservableObject {
         guard desiredConnections.contains(remote.id) else {
             return
         }
+        guard !wakePreflightInProgress else {
+            diagnostics.append(
+                level: .debug,
+                category: "recovery",
+                message: "Ignoring external unmount for \(remote.displayName) during wake preflight cleanup."
+            )
+            return
+        }
 
         let currentState = status(for: remote.id).state
         guard currentState != .disconnecting else {
@@ -1638,6 +1656,17 @@ final class RemotesViewModel: ObservableObject {
             if Date().timeIntervalSince(lastSleepSkipLogAt) >= 60 {
                 diagnostics.append(level: .debug, category: "recovery", message: "Skipping recovery pass (\(trigger)) because system is sleeping.")
                 lastSleepSkipLogAt = Date()
+            }
+            return
+        }
+        guard !wakePreflightInProgress else {
+            if Date().timeIntervalSince(lastWakePreflightSkipLogAt) >= 60 {
+                diagnostics.append(
+                    level: .debug,
+                    category: "recovery",
+                    message: "Skipping recovery pass (\(trigger)) while wake preflight cleanup is in progress."
+                )
+                lastWakePreflightSkipLogAt = Date()
             }
             return
         }

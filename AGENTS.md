@@ -251,6 +251,7 @@ Tooltip includes:
 Settings window:
 - Explicit open only from menu action.
 - Shows launch-at-login state, including approval/fallback details.
+- Includes entry point button that opens a dedicated `Editor Plugins` window.
 
 Remote detail panel:
 - Edit, Duplicate, Delete, Refresh, Connect, Disconnect.
@@ -269,19 +270,58 @@ Validation + uniqueness:
 - Local mountpoint unique (normalized, case-insensitive).
 - Remote path supports UNIX and Windows drive forms.
 
-## 11) VS Code Open Flow
+## 11) Open-In-Editor Plugin Flow
 
-Menu actions support “Open in VS Code” only when remote is connected.
+Menu actions support opening connected remotes in a configurable editor plugin set.
 
-Open strategy order:
+Core behavior:
+- Primary action uses preferred plugin with fallback across active plugins.
+- Secondary `Open In…` picker allows explicit plugin selection.
+- If all attempts fail, app opens the folder in Finder and emits alert + diagnostics warning.
+
+Built-in plugins:
+- `vscode` (default active)
+- `vscodium`
+- `cursor`
+- `zed`
+- Built-in manifest source-of-truth in repo:
+  - `macfuseGui/Resources/EditorPlugins/vscode/plugin.json`
+  - `macfuseGui/Resources/EditorPlugins/vscodium/plugin.json`
+  - `macfuseGui/Resources/EditorPlugins/cursor/plugin.json`
+  - `macfuseGui/Resources/EditorPlugins/zed/plugin.json`
+
+Built-in `vscode` attempts are VS Code-only:
 1. `open -b com.microsoft.VSCode`
 2. `open -b com.microsoft.VSCodeInsiders`
-3. `open -b com.vscodium`
-4. `open -a Visual Studio Code` variants
-5. `code --reuse-window`
+3. `open -a Visual Studio Code` variants
+4. `code --reuse-window`
 
-Fallback:
-- If all fail, opens the folder in Finder and emits alert + diagnostics warning.
+Cross-editor fallback is handled by plugin ordering across active plugins, not mixed attempts inside one plugin manifest.
+
+Plugin registry:
+- Service: `macfuseGui/Services/EditorPluginRegistry.swift`
+- Model: `macfuseGui/Models/EditorPlugin.swift`
+- Persisted toggle overrides: `editor.plugins.activation_overrides`
+- Persisted preferred plugin: `editor.plugins.preferred_id`
+- External manifests path: `~/Library/Application Support/macfuseGui/editor-plugins/*.json`
+- On first load, registry auto-creates scaffold files:
+  - `README.md`
+  - `examples/custom-editor.json.template`
+  - `builtin-reference/*.json` (reference docs for shipped built-ins; non-recursive loader means these are not loaded as external manifests)
+
+Manifest safety contract:
+- Allowed executables: `/usr/bin/open`, `/usr/bin/env`
+- Must include `{folderPath}` placeholder in arguments
+- `/usr/bin/open` forms require `-a` or `-b`
+- `/usr/bin/env` forms require a bare command token first arg
+
+Settings UX:
+- Real-time check/uncheck plugin toggles (no restart)
+- Preferred editor picker from active plugins
+- Manual `Reload Plugins` action to rescan manifest files
+- Buttons to open plugin root, examples, and built-in reference folders in Finder
+- `New Plugin JSON` action creates a template manifest directly in the external plugin folder
+- Per-plugin inline JSON editor loads/saves manifests directly inside the plugin settings window
 
 ## 12) Browser Subsystem (libssh2 Session Model)
 
@@ -410,7 +450,7 @@ Diagnostics snapshot includes:
 - `Browser Sessions` section (health, retries, path, latency, last success)
 
 Expected categories:
-- `store`, `mount`, `unmount`, `recovery`, `operations`, `remote-browser`, `startup`, `vscode`, `diagnostics`, `app`
+- `store`, `mount`, `unmount`, `recovery`, `operations`, `remote-browser`, `startup`, `editor`, `vscode`, `diagnostics`, `app`
 
 No secrets in diagnostics:
 - Askpass and passwords are redacted or omitted.
@@ -476,3 +516,5 @@ Tests:
 13. Keep path-memory normalization and limits.
 14. Keep command execution as argument arrays only.
 15. Never log secrets.
+16. Preserve plugin registry safety rules (`/usr/bin/open`/`/usr/bin/env`, `{folderPath}` placeholder requirement).
+17. Preserve preferred-plugin + fallback semantics and Finder fallback on complete editor-open failure.

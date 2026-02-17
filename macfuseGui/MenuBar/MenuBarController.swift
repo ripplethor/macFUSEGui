@@ -26,7 +26,8 @@ final class MenuBarController: NSObject {
 
     private let viewModel: RemotesViewModel
     private let settingsWindowController: SettingsWindowController
-    private let runner: ProcessRunning
+    private let editorPluginRegistry: EditorPluginRegistry
+    private let editorOpenService: EditorOpenService
     private let statusItem: NSStatusItem
     private let popover: NSPopover
 
@@ -50,10 +51,16 @@ final class MenuBarController: NSObject {
     ]
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(viewModel: RemotesViewModel, settingsWindowController: SettingsWindowController, runner: ProcessRunning) {
+    init(
+        viewModel: RemotesViewModel,
+        settingsWindowController: SettingsWindowController,
+        editorPluginRegistry: EditorPluginRegistry,
+        editorOpenService: EditorOpenService
+    ) {
         self.viewModel = viewModel
         self.settingsWindowController = settingsWindowController
-        self.runner = runner
+        self.editorPluginRegistry = editorPluginRegistry
+        self.editorOpenService = editorOpenService
 
         if let existingStatusItem = Self.activeStatusItem {
             NSStatusBar.system.removeStatusItem(existingStatusItem)
@@ -145,13 +152,15 @@ final class MenuBarController: NSObject {
 
         let content = MenuPopoverContentView(
             viewModel: viewModel,
+            editorPluginRegistry: editorPluginRegistry,
             // Menu actions intentionally route back into view model/service flows.
             onOpenSettings: { [weak self] in self?.openSettings() },
             onRefresh: { [weak self] in self?.refreshStatus() },
             onCopyDiagnostics: { [weak self] in self?.copyDiagnostics() },
             onConnect: { [weak self] remoteID in self?.connectRemote(remoteID) },
             onDisconnect: { [weak self] remoteID in self?.disconnectRemote(remoteID) },
-            onOpenVSCode: { [weak self] remoteID in self?.openRemoteMountInVSCode(remoteID) },
+            onOpenInPreferredEditor: { [weak self] remoteID in self?.openRemoteMountInPreferredEditor(remoteID) },
+            onOpenInEditorPlugin: { [weak self] remoteID, pluginID in self?.openRemoteMountInEditor(remoteID, pluginID: pluginID) },
             onForceResetMounts: { [weak self] in self?.forceResetAllMounts() },
             onQuit: { [weak self] in self?.quitApp() }
         )
@@ -411,7 +420,17 @@ final class MenuBarController: NSObject {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func openRemoteMountInVSCode(_ remoteID: UUID) {
+    private func openRemoteMountInPreferredEditor(_ remoteID: UUID) {
+        openRemoteMountInEditor(remoteID, mode: .preferredWithFallback)
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    private func openRemoteMountInEditor(_ remoteID: UUID, pluginID: String) {
+        openRemoteMountInEditor(remoteID, mode: .explicit(pluginID: pluginID))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    private func openRemoteMountInEditor(_ remoteID: UUID, mode: EditorOpenMode) {
         Task { @MainActor [weak self] in
             guard let self else {
                 return
@@ -439,75 +458,98 @@ final class MenuBarController: NSObject {
             }
 
             let folderURL = URL(fileURLWithPath: targetPath, isDirectory: true)
-            if !(await self.openFolderInVSCode(folderURL, remoteName: remote.displayName)) {
-                NSWorkspace.shared.activateFileViewerSelecting([folderURL])
-                self.viewModel.alertMessage = "Could not open VS Code. Opened mount folder in Finder instead."
+            let result = await self.editorOpenService.open(
+                folderURL: folderURL,
+                remoteName: remote.displayName,
+                mode: mode
+            )
+            self.logEditorOpenResult(
+                result,
+                remoteName: remote.displayName,
+                folderPath: folderURL.path
+            )
+
+            guard !result.success else {
+                return
             }
+
+            NSWorkspace.shared.activateFileViewerSelecting([folderURL])
+            self.viewModel.alertMessage = "\(result.message ?? "Could not open an editor.") Opened mount folder in Finder instead."
         }
     }
 
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    private func openFolderInVSCode(_ folderURL: URL, remoteName: String) async -> Bool {
-        let launchAttempts: [(label: String, executable: String, arguments: [String])] = [
-            ("open bundle com.microsoft.VSCode", "/usr/bin/open", ["-b", "com.microsoft.VSCode", folderURL.path]),
-            ("open bundle com.microsoft.VSCodeInsiders", "/usr/bin/open", ["-b", "com.microsoft.VSCodeInsiders", folderURL.path]),
-            ("open bundle com.vscodium", "/usr/bin/open", ["-b", "com.vscodium", folderURL.path]),
-            ("open app Visual Studio Code", "/usr/bin/open", ["-a", "Visual Studio Code", folderURL.path]),
-            ("open app Visual Studio Code - Insiders", "/usr/bin/open", ["-a", "Visual Studio Code - Insiders", folderURL.path]),
-            ("open app VSCodium", "/usr/bin/open", ["-a", "VSCodium", folderURL.path]),
-            ("code --reuse-window", "/usr/bin/env", ["code", "--reuse-window", folderURL.path])
-        ]
-
-        var failureNotes: [String] = []
-        for attempt in launchAttempts {
-            // These "open" commands should return quickly. If they hang (rare but possible),
-            // we don't want the menu UI to beachball.
-            let result = await runProcess(executable: attempt.executable, arguments: attempt.arguments, timeout: 3)
-            if result.success {
-                viewModel.appendDiagnostic(
-                    level: .info,
-                    category: "vscode",
-                    message: "Opened \(remoteName) in VS Code via \(attempt.label): \(folderURL.path)"
-                )
-                return true
-            }
-
-            let shortOutput = result.output.isEmpty ? "exit \(result.exitCode)" : result.output
-            failureNotes.append("\(attempt.label) -> \(shortOutput)")
-        }
-
-        if !failureNotes.isEmpty {
+    /// Beginner note: Write a compact and consistent diagnostics stream for plugin attempts/results.
+    private func logEditorOpenResult(
+        _ result: EditorOpenResult,
+        remoteName: String,
+        folderPath: String
+    ) {
+        if result.pluginResults.isEmpty {
             viewModel.appendDiagnostic(
                 level: .warning,
-                category: "vscode",
-                message: "Unable to open \(remoteName) in VS Code (\(folderURL.path)). Attempts: \(failureNotes.joined(separator: " | "))"
+                category: "editor",
+                message: "No editor plugin attempts for \(remoteName) (\(folderPath)). \(result.message ?? "No detail")"
             )
+            return
         }
 
-        return false
+        var failureNotes: [String] = []
+        var sawVSCodePlugin = false
+
+        for pluginResult in result.pluginResults {
+            let category = diagnosticCategory(for: pluginResult.pluginID)
+            sawVSCodePlugin = sawVSCodePlugin || category == "vscode"
+
+            for attempt in pluginResult.attempts {
+                let output = compactDiagnosticText(attempt.output.isEmpty ? "exit \(attempt.exitCode)" : attempt.output)
+                let statusText = attempt.success ? "success" : "failure"
+                let message = "editor attempt pluginID=\(pluginResult.pluginID) plugin=\(pluginResult.pluginDisplayName) label=\(attempt.label) executable=\(attempt.executable) args=\(attempt.arguments.joined(separator: " ")) timeoutSec=\(String(format: "%.1f", attempt.timeoutSeconds)) status=\(statusText) exit=\(attempt.exitCode) timedOut=\(attempt.timedOut) output=\(output)"
+                viewModel.appendDiagnostic(
+                    level: attempt.success ? .info : .debug,
+                    category: category,
+                    message: message
+                )
+
+                if !attempt.success {
+                    failureNotes.append("\(pluginResult.pluginDisplayName):\(attempt.label)->\(output)")
+                }
+            }
+        }
+
+        if result.success, let pluginName = result.launchedPluginDisplayName {
+            let pluginID = result.launchedPluginID ?? "-"
+            let category = diagnosticCategory(for: pluginID)
+            let successMessage = "Opened \(remoteName) in \(pluginName) (\(folderPath))."
+            viewModel.appendDiagnostic(level: .info, category: "editor", message: successMessage)
+            if category != "editor" {
+                viewModel.appendDiagnostic(level: .info, category: category, message: successMessage)
+            }
+            return
+        }
+
+        let joinedFailures = failureNotes.joined(separator: " | ")
+        let failureMessage = "Unable to open \(remoteName) in editor (\(folderPath)). Attempts: \(joinedFailures)"
+        viewModel.appendDiagnostic(level: .warning, category: "editor", message: failureMessage)
+        if sawVSCodePlugin {
+            viewModel.appendDiagnostic(level: .warning, category: "vscode", message: failureMessage)
+        }
     }
 
-    /// Beginner note: This method is one step in the feature workflow for this file.
-    private func runProcess(
-        executable: String,
-        arguments: [String],
-        timeout: TimeInterval
-    ) async -> (success: Bool, exitCode: Int32, output: String) {
-        do {
-            let result = try await runner.run(
-                executable: executable,
-                arguments: arguments,
-                timeout: timeout
-            )
-            let combined = [result.stdout, result.stderr]
-                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                .joined(separator: "\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let success = !result.timedOut && result.exitCode == 0
-            return (success, result.exitCode, combined)
-        } catch {
-            return (false, -1, error.localizedDescription)
+    private func diagnosticCategory(for pluginID: String) -> String {
+        pluginID == "vscode" ? "vscode" : "editor"
+    }
+
+    private func compactDiagnosticText(_ value: String, limit: Int = 180) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if normalized.count <= limit {
+            return normalized
         }
+        return String(normalized.prefix(limit)) + "…"
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -533,13 +575,15 @@ final class MenuBarController: NSObject {
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 private struct MenuPopoverContentView: View {
     @ObservedObject var viewModel: RemotesViewModel
+    @ObservedObject var editorPluginRegistry: EditorPluginRegistry
 
     let onOpenSettings: () -> Void
     let onRefresh: () -> Void
     let onCopyDiagnostics: () -> Void
     let onConnect: (UUID) -> Void
     let onDisconnect: (UUID) -> Void
-    let onOpenVSCode: (UUID) -> Void
+    let onOpenInPreferredEditor: (UUID) -> Void
+    let onOpenInEditorPlugin: (UUID, String) -> Void
     let onForceResetMounts: () -> Void
     let onQuit: () -> Void
 
@@ -560,9 +604,14 @@ private struct MenuPopoverContentView: View {
                                 remote: remote,
                                 status: viewModel.status(for: remote.id),
                                 badgeStateRawValue: viewModel.statusBadgeRawValue(for: remote.id),
+                                preferredPluginDisplayName: preferredPluginDisplayName,
+                                activeEditorPlugins: activeEditorPlugins,
                                 onConnect: { onConnect(remote.id) },
                                 onDisconnect: { onDisconnect(remote.id) },
-                                onOpenVSCode: { onOpenVSCode(remote.id) }
+                                onOpenInPreferredEditor: { onOpenInPreferredEditor(remote.id) },
+                                onOpenInEditorPlugin: { pluginID in
+                                    onOpenInEditorPlugin(remote.id, pluginID)
+                                }
                             )
                         }
                     }
@@ -661,6 +710,14 @@ private struct MenuPopoverContentView: View {
         return "C \(connected) • R \(reconnecting) • A \(active) • E \(errors) • D \(disconnected)"
     }
 
+    private var preferredPluginDisplayName: String {
+        editorPluginRegistry.preferredPlugin()?.displayName ?? "Editor"
+    }
+
+    private var activeEditorPlugins: [EditorPluginDefinition] {
+        editorPluginRegistry.activePluginsInPriorityOrder()
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func recoveryReasonLabel(_ reason: String) -> String {
         switch reason {
@@ -680,9 +737,12 @@ private struct RemotePopoverRow: View {
     let remote: RemoteConfig
     let status: RemoteStatus
     let badgeStateRawValue: String
+    let preferredPluginDisplayName: String
+    let activeEditorPlugins: [EditorPluginDefinition]
     let onConnect: () -> Void
     let onDisconnect: () -> Void
-    let onOpenVSCode: () -> Void
+    let onOpenInPreferredEditor: () -> Void
+    let onOpenInEditorPlugin: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -719,8 +779,20 @@ private struct RemotePopoverRow: View {
                     .disabled(!canConnect)
                 Button("Disconnect", action: onDisconnect)
                     .disabled(!canDisconnect)
-                Button("Open in VS Code", action: onOpenVSCode)
-                    .disabled(status.state != .connected)
+                Button("Open in \(preferredPluginDisplayName)", action: onOpenInPreferredEditor)
+                    .disabled(status.state != .connected || activeEditorPlugins.isEmpty)
+                Menu("Open In…") {
+                    if activeEditorPlugins.isEmpty {
+                        Text("No active editor plugins")
+                    } else {
+                        ForEach(activeEditorPlugins) { plugin in
+                            Button(plugin.displayName) {
+                                onOpenInEditorPlugin(plugin.id)
+                            }
+                        }
+                    }
+                }
+                .disabled(status.state != .connected || activeEditorPlugins.isEmpty)
                 Spacer()
             }
         }

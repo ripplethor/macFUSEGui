@@ -1,0 +1,26 @@
+{
+  "id": "zed",
+  "displayName": "Zed",
+  "priority": 40,
+  "defaultEnabled": false,
+  "launchAttempts": [
+    {
+      "label": "open bundle dev.zed.Zed",
+      "executable": "/usr/bin/open",
+      "arguments": ["-b", "dev.zed.Zed", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "open app Zed",
+      "executable": "/usr/bin/open",
+      "arguments": ["-a", "Zed", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "zed --reuse-window",
+      "executable": "/usr/bin/env",
+      "arguments": ["zed", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 3
+    }
+  ]
+}

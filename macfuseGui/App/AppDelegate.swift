@@ -77,7 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.menuBarController = MenuBarController(
                 viewModel: environment.remotesViewModel,
                 settingsWindowController: environment.settingsWindowController,
-                runner: environment.processRunner
+                editorPluginRegistry: environment.editorPluginRegistry,
+                editorOpenService: environment.editorOpenService
             )
 
             Task { @MainActor [weak self] in

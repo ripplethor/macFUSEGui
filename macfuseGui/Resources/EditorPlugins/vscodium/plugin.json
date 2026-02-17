@@ -1,0 +1,26 @@
+{
+  "id": "vscodium",
+  "displayName": "VSCodium",
+  "priority": 20,
+  "defaultEnabled": false,
+  "launchAttempts": [
+    {
+      "label": "open bundle com.vscodium",
+      "executable": "/usr/bin/open",
+      "arguments": ["-b", "com.vscodium", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "open app VSCodium",
+      "executable": "/usr/bin/open",
+      "arguments": ["-a", "VSCodium", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "codium --reuse-window",
+      "executable": "/usr/bin/env",
+      "arguments": ["codium", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 3
+    }
+  ]
+}

@@ -10,6 +10,12 @@
 		0954232ABBBE1E79AD928C08 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946211003B1FB7FCB040BDF /* ProcessRunner.swift */; };
 		103A7C95077E922349BC6533 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D46D6D34DC8DC231BA9AFF78 /* KeychainService.swift */; };
 		10C10B21DCDEC2AD88223A8E /* AppError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C3E3B9C41A26A4B3756212 /* AppError.swift */; };
+		0AA1B2C3D4E5F60718293A41 /* EditorPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B41 /* EditorPlugin.swift */; };
+		0AA1B2C3D4E5F60718293A42 /* EditorPluginRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B42 /* EditorPluginRegistry.swift */; };
+		0AA1B2C3D4E5F60718293A43 /* EditorOpenService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B43 /* EditorOpenService.swift */; };
+		0AA1B2C3D4E5F60718293A44 /* EditorPluginRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B44 /* EditorPluginRegistryTests.swift */; };
+		0AA1B2C3D4E5F60718293A45 /* EditorOpenServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB1B2C3D4E5F60718293B45 /* EditorOpenServiceTests.swift */; };
+		0CC1D2E3F4A5061728394A50 /* EditorPlugins in Resources */ = {isa = PBXBuildFile; fileRef = 0CC1D2E3F4A5061728394A51 /* EditorPlugins */; };
 		137F4DB2EF0C3B99EAFE6F75 /* MountRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05E9274C616A1D6999000F5 /* MountRecord.swift */; };
 		149E572890F1AB3C2ED44EAA /* BrowserConnectionHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 371B5AC84818F7618819D2A8 /* BrowserConnectionHealth.swift */; };
 		1C3944B08AAB503DAB4380E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */; };
@@ -72,6 +78,12 @@
 /* Begin PBXFileReference section */
 		06148311183BDBFC0D84CE6B /* RemoteStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteStoreTests.swift; sourceTree = "<group>"; };
 		0FB155E1FF0B98531B0C8C4B /* RemoteStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteStore.swift; sourceTree = "<group>"; };
+		0BB1B2C3D4E5F60718293B41 /* EditorPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorPlugin.swift; sourceTree = "<group>"; };
+		0BB1B2C3D4E5F60718293B42 /* EditorPluginRegistry.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorPluginRegistry.swift; sourceTree = "<group>"; };
+		0BB1B2C3D4E5F60718293B43 /* EditorOpenService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorOpenService.swift; sourceTree = "<group>"; };
+		0BB1B2C3D4E5F60718293B44 /* EditorPluginRegistryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorPluginRegistryTests.swift; sourceTree = "<group>"; };
+		0BB1B2C3D4E5F60718293B45 /* EditorOpenServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditorOpenServiceTests.swift; sourceTree = "<group>"; };
+		0CC1D2E3F4A5061728394A51 /* EditorPlugins */ = {isa = PBXFileReference; lastKnownFileType = folder; path = EditorPlugins; sourceTree = "<group>"; };
 		1397ABA1500C2F6FAA5A943C /* UnmountService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UnmountService.swift; sourceTree = "<group>"; };
 		14D6B5E59F24E237BE9A2048 /* AppEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		1DC9455185A25C4BD66699BD /* LibSSH2SessionActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibSSH2SessionActor.swift; path = Browser/LibSSH2SessionActor.swift; sourceTree = "<group>"; };
@@ -215,6 +227,8 @@
 				B12EFDD63AACEF8CB0DC5D00 /* SFTPDirectoryParser.swift */,
 				C3B675FE49225F98D782450A /* DependencyChecker.swift */,
 				5831A43EDDC8CEF100C95F22 /* DiagnosticsService.swift */,
+				0BB1B2C3D4E5F60718293B43 /* EditorOpenService.swift */,
+				0BB1B2C3D4E5F60718293B42 /* EditorPluginRegistry.swift */,
 				D46D6D34DC8DC231BA9AFF78 /* KeychainService.swift */,
 				F89221BEA6FA740F83907CDB /* MountCommandBuilder.swift */,
 				5FFCCBA28584A224841831D5 /* MountManager.swift */,
@@ -271,6 +285,8 @@
 		7897B60AB4FD863491457965 /* macfuseGuiTests */ = {
 			isa = PBXGroup;
 			children = (
+				0BB1B2C3D4E5F60718293B45 /* EditorOpenServiceTests.swift */,
+				0BB1B2C3D4E5F60718293B44 /* EditorPluginRegistryTests.swift */,
 				BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */,
 				CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */,
 				62E8919B0F450B3D28E534FE /* MountStateParserTests.swift */,
@@ -290,6 +306,7 @@
 			children = (
 				C5C3E3B9C41A26A4B3756212 /* AppError.swift */,
 				371B5AC84818F7618819D2A8 /* BrowserConnectionHealth.swift */,
+				0BB1B2C3D4E5F60718293B41 /* EditorPlugin.swift */,
 				A05E9274C616A1D6999000F5 /* MountRecord.swift */,
 				FB6DB87BF922E1AFEAE71549 /* RemoteAuth.swift */,
 				CE172C849059518AB43E41B5 /* RemoteConfig.swift */,
@@ -303,6 +320,7 @@
 			isa = PBXGroup;
 			children = (
 				976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */,
+				0CC1D2E3F4A5061728394A51 /* EditorPlugins */,
 				87DAF630CAB61DDD67C4626B /* Info.plist */,
 			);
 			name = Resources;
@@ -392,6 +410,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1C3944B08AAB503DAB4380E1 /* Assets.xcassets in Resources */,
+				0CC1D2E3F4A5061728394A50 /* EditorPlugins in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -402,6 +421,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0AA1B2C3D4E5F60718293A45 /* EditorOpenServiceTests.swift in Sources */,
+				0AA1B2C3D4E5F60718293A44 /* EditorPluginRegistryTests.swift in Sources */,
 				424336D6132B83926F3E3AA5 /* KeychainServiceTests.swift in Sources */,
 				9BF77D70B94A2397034BF606 /* MountArgBuilderTests.swift in Sources */,
 				5D8518327271BCFD0F9C51D4 /* MountStateParserTests.swift in Sources */,
@@ -425,6 +446,7 @@
 				AE2E6207DCB2A8676E70F39E /* MenuBarController.swift in Sources */,
 				10C10B21DCDEC2AD88223A8E /* AppError.swift in Sources */,
 				149E572890F1AB3C2ED44EAA /* BrowserConnectionHealth.swift in Sources */,
+				0AA1B2C3D4E5F60718293A41 /* EditorPlugin.swift in Sources */,
 				137F4DB2EF0C3B99EAFE6F75 /* MountRecord.swift in Sources */,
 				D2AFF0BE1B0446CEE2AE0595 /* RemoteAuth.swift in Sources */,
 				37D24383F66D11BE62644D6A /* RemoteConfig.swift in Sources */,
@@ -438,6 +460,8 @@
 				73DA5932FEE9C129AA1280F7 /* SFTPDirectoryParser.swift in Sources */,
 				AF3682692F0C4028511D5C30 /* DependencyChecker.swift in Sources */,
 				2A046DE8D98F318CF458C9FF /* DiagnosticsService.swift in Sources */,
+				0AA1B2C3D4E5F60718293A43 /* EditorOpenService.swift in Sources */,
+				0AA1B2C3D4E5F60718293A42 /* EditorPluginRegistry.swift in Sources */,
 				103A7C95077E922349BC6533 /* KeychainService.swift in Sources */,
 				CF60BFAF2681BD9F8E86E8EB /* MountCommandBuilder.swift in Sources */,
 				B3ECAB6B9206097A103F8D5A /* MountManager.swift in Sources */,

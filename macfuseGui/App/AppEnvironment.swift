@@ -26,8 +26,11 @@ final class AppEnvironment {
     let unmountService: UnmountService
     let mountManager: MountManager
     let remoteDirectoryBrowserService: RemoteDirectoryBrowserService
+    let editorPluginRegistry: EditorPluginRegistry
+    let editorOpenService: EditorOpenService
     let remotesViewModel: RemotesViewModel
     let settingsWindowController: SettingsWindowController
+    let editorPluginSettingsWindowController: EditorPluginSettingsWindowController
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init() {
@@ -67,6 +70,11 @@ final class AppEnvironment {
             manager: browserSessionManager,
             diagnostics: diagnosticsService
         )
+        editorPluginRegistry = EditorPluginRegistry()
+        editorOpenService = EditorOpenService(
+            pluginRegistry: editorPluginRegistry,
+            runner: processRunner
+        )
 
         remotesViewModel = RemotesViewModel(
             remoteStore: remoteStore,
@@ -79,7 +87,17 @@ final class AppEnvironment {
             launchAtLoginService: launchAtLoginService
         )
 
-        settingsWindowController = SettingsWindowController(viewModel: remotesViewModel)
+        let pluginSettingsWindowController = EditorPluginSettingsWindowController(
+            editorPluginRegistry: editorPluginRegistry
+        )
+        editorPluginSettingsWindowController = pluginSettingsWindowController
+
+        settingsWindowController = SettingsWindowController(
+            viewModel: remotesViewModel,
+            onOpenEditorPlugins: {
+                pluginSettingsWindowController.showWindow(nil)
+            }
+        )
         remotesViewModel.load()
     }
 }

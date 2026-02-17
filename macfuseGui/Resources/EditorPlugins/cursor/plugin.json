@@ -1,0 +1,26 @@
+{
+  "id": "cursor",
+  "displayName": "Cursor",
+  "priority": 30,
+  "defaultEnabled": false,
+  "launchAttempts": [
+    {
+      "label": "open bundle com.todesktop.230313mzl4w4u92",
+      "executable": "/usr/bin/open",
+      "arguments": ["-b", "com.todesktop.230313mzl4w4u92", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "open app Cursor",
+      "executable": "/usr/bin/open",
+      "arguments": ["-a", "Cursor", "{folderPath}"],
+      "timeoutSeconds": 3
+    },
+    {
+      "label": "cursor --reuse-window",
+      "executable": "/usr/bin/env",
+      "arguments": ["cursor", "--reuse-window", "{folderPath}"],
+      "timeoutSeconds": 3
+    }
+  ]
+}

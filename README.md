@@ -18,6 +18,11 @@
 - Per-remote startup toggle: `Auto-connect on app launch`.
 - Recovery handling for sleep/wake and network restoration.
 - Busy unmount diagnostics (shows blocking processes via `lsof`).
+- Open-in-editor plugin system:
+  - Built-in editor plugins (`VS Code`, `VSCodium`, `Cursor`, `Zed`)
+  - Preferred editor + fallback across active plugins
+  - Real-time enable/disable in Settings
+  - External plugin manifests from disk
 - Finder-style remote browser:
   - Sidebar (Favorites / Recents / Roots)
   - Breadcrumb navigation
@@ -36,6 +41,64 @@ Expected `sshfs` search order:
 1. `/opt/homebrew/bin/sshfs`
 2. `/usr/local/bin/sshfs`
 3. `sshfs` from `$PATH`
+
+## Open-In-Editor Plugins
+
+The menu popover provides:
+- Primary one-click action: `Open in <Preferred Editor>`
+- Explicit picker action: `Open In…`
+
+Default behavior:
+- Built-ins shipped: `vscode`, `vscodium`, `cursor`, `zed`
+- Only `vscode` starts active by default
+- Preferred editor auto-rehomes to the next active plugin if needed
+- If all attempts fail, app falls back to Finder and records diagnostics
+- Each built-in plugin manifest is editor-specific (no cross-editor mixed attempts inside one plugin)
+- Built-in manifests live in codebase under:
+  - `macfuseGui/Resources/EditorPlugins/vscode/plugin.json`
+  - `macfuseGui/Resources/EditorPlugins/vscodium/plugin.json`
+  - `macfuseGui/Resources/EditorPlugins/cursor/plugin.json`
+  - `macfuseGui/Resources/EditorPlugins/zed/plugin.json`
+
+Settings behavior:
+- Toggle plugins on/off in real time (no restart)
+- Select preferred editor from active plugins
+- Reload plugin manifests manually with `Reload Plugins`
+- Open dedicated `Editor Plugins…` window from Settings
+- Reveal plugin directory in Finder
+- Create a new plugin manifest from template (`New Plugin JSON`)
+- Edit manifest JSON inline for any selected plugin (`Inline JSON Editor`)
+
+External manifests:
+- Directory: `~/Library/Application Support/macfuseGui/editor-plugins`
+- File type: `*.json` (one plugin per file)
+- The app auto-creates this folder on first load with:
+  - `README.md` usage guide
+  - `examples/custom-editor.json.template`
+  - `builtin-reference/*.json` (reference definitions for shipped editors; not loaded as external plugins)
+- Security rules:
+  - only `/usr/bin/open` and `/usr/bin/env` executables
+  - launch attempt must include `{folderPath}` placeholder
+  - command arrays only; no shell interpolation
+
+Example manifest:
+
+```json
+{
+  "id": "windsurf",
+  "displayName": "Windsurf",
+  "priority": 50,
+  "defaultEnabled": false,
+  "launchAttempts": [
+    {
+      "label": "open app Windsurf",
+      "executable": "/usr/bin/open",
+      "arguments": ["-a", "Windsurf", "{folderPath}"],
+      "timeoutSeconds": 3
+    }
+  ]
+}
+```
 
 ## Build / Run / Clean
 
