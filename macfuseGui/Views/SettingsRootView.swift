@@ -287,6 +287,12 @@ struct EditorPluginSettingsView: View {
     @State private var selectedPluginID: String?
     @State private var manifestEditorText: String = ""
     @State private var manifestEditorOriginalText: String = ""
+    @State private var pendingPluginRemoval: PendingPluginRemoval?
+
+    private struct PendingPluginRemoval: Identifiable {
+        let id: String
+        let displayName: String
+    }
 
     var body: some View {
         ScrollView {
@@ -348,6 +354,18 @@ struct EditorPluginSettingsView: View {
         }
         .onChange(of: editorPluginRegistry.plugins.map(\.id)) { _ in
             ensurePluginSelection()
+        }
+        .alert(
+            "Remove External Plugin?",
+            isPresented: pendingRemovalPresentedBinding,
+            presenting: pendingPluginRemoval
+        ) { removal in
+            Button("Remove", role: .destructive) {
+                confirmExternalPluginRemoval(pluginID: removal.id)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { removal in
+            Text("Delete '\(removal.displayName)' from the external plugin folder?")
         }
     }
 
@@ -475,25 +493,37 @@ struct EditorPluginSettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .lineLimit(3)
 
-                    HStack(spacing: 8) {
-                        Button("Reveal in Finder") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Button {
                             openInFinder(editorPluginRegistry.pluginsDirectoryPath)
+                        } label: {
+                            Label("Reveal in Finder", systemImage: "folder")
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)
 
-                        Button("New Plugin JSON") {
+                        Button {
                             createNewPluginJSON()
+                        } label: {
+                            Label("New Plugin JSON", systemImage: "plus.rectangle.on.rectangle")
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.blue)
 
-                        Button("Open Examples") {
+                        Button {
                             openInFinder(editorPluginRegistry.pluginExamplesDirectoryPath)
+                        } label: {
+                            Label("Open Examples", systemImage: "doc.on.doc")
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)
 
-                        Button("Built-ins") {
+                        Button {
                             openInFinder(editorPluginRegistry.builtInReferenceDirectoryPath)
+                        } label: {
+                            Label("Built-ins", systemImage: "shippingbox")
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)
                     }
@@ -695,6 +725,17 @@ struct EditorPluginSettingsView: View {
                     .buttonStyle(.plain)
                     .help("Edit plugin JSON inline")
 
+                    if plugin.source == .external {
+                        Button {
+                            requestExternalPluginRemoval(plugin)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove external plugin")
+                    }
+
                     Button {
                         editorPluginRegistry.setPreferredPlugin(plugin.id)
                     } label: {
@@ -789,6 +830,17 @@ struct EditorPluginSettingsView: View {
         manifestEditorText != manifestEditorOriginalText
     }
 
+    private var pendingRemovalPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { pendingPluginRemoval != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingPluginRemoval = nil
+                }
+            }
+        )
+    }
+
     private var preferredPluginBinding: Binding<String> {
         Binding(
             get: {
@@ -833,6 +885,33 @@ struct EditorPluginSettingsView: View {
             selectPlugin(fileURL.deletingPathExtension().lastPathComponent)
         } catch {
             pluginActionError = "Failed to create plugin JSON: \(error.localizedDescription)"
+            pluginActionStatus = nil
+        }
+    }
+
+    private func requestExternalPluginRemoval(_ plugin: EditorPluginDefinition) {
+        guard plugin.source == .external else {
+            pluginActionError = "Built-in plugins cannot be removed."
+            pluginActionStatus = nil
+            return
+        }
+
+        pendingPluginRemoval = PendingPluginRemoval(
+            id: plugin.id,
+            displayName: plugin.displayName
+        )
+    }
+
+    private func confirmExternalPluginRemoval(pluginID: String) {
+        do {
+            let removedName = try editorPluginRegistry.removeExternalPlugin(pluginID: pluginID)
+            pendingPluginRemoval = nil
+            pluginActionError = nil
+            pluginActionStatus = "Removed external plugin '\(removedName)'."
+            ensurePluginSelection()
+        } catch {
+            pendingPluginRemoval = nil
+            pluginActionError = "Failed to remove plugin: \(error.localizedDescription)"
             pluginActionStatus = nil
         }
     }

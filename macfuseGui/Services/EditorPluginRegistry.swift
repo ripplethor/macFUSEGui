@@ -228,6 +228,33 @@ final class EditorPluginRegistry: ObservableObject {
         return validated.id
     }
 
+    /// Beginner note: Removes an external plugin manifest and reloads plugin catalog.
+    @discardableResult
+    func removeExternalPlugin(pluginID: String) throws -> String {
+        guard let definition = plugin(id: pluginID) else {
+            throw AppError.validationFailed(["Plugin '\(pluginID)' is not available."])
+        }
+        guard definition.source == .external else {
+            throw AppError.validationFailed(["Built-in plugin '\(pluginID)' cannot be removed."])
+        }
+        guard let manifestURL = externalManifestURL(for: definition.id) else {
+            throw AppError.validationFailed([
+                "Manifest file for external plugin '\(pluginID)' was not found."
+            ])
+        }
+
+        do {
+            try fileManager.removeItem(at: manifestURL)
+        } catch {
+            throw AppError.validationFailed([
+                "Unable to remove manifest '\(manifestURL.path)': \(error.localizedDescription)"
+            ])
+        }
+
+        reloadCatalog()
+        return definition.displayName
+    }
+
     /// Beginner note: Create a starter external plugin manifest in the live plugin directory.
     func createExternalPluginTemplateFile() throws -> URL {
         var issues: [EditorPluginLoadIssue] = []

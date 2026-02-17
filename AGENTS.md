@@ -322,6 +322,7 @@ Settings UX:
 - Buttons to open plugin root, examples, and built-in reference folders in Finder
 - `New Plugin JSON` action creates a template manifest directly in the external plugin folder
 - Per-plugin inline JSON editor loads/saves manifests directly inside the plugin settings window
+- Per-plugin external remove action (`trash`) deletes external manifest files (built-ins are non-removable)
 
 ## 12) Browser Subsystem (libssh2 Session Model)
 

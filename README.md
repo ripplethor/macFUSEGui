@@ -68,6 +68,7 @@ Settings behavior:
 - Reveal plugin directory in Finder
 - Create a new plugin manifest from template (`New Plugin JSON`)
 - Edit manifest JSON inline for any selected plugin (`Inline JSON Editor`)
+- Remove external plugins directly from the plugin catalog (`Trash`)
 
 External manifests:
 - Directory: `~/Library/Application Support/macfuseGui/editor-plugins`

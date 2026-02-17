@@ -257,6 +257,45 @@ final class EditorPluginRegistryTests: XCTestCase {
         XCTAssertTrue(registry.loadIssues.contains(where: { $0.file == "duplicate.json" }))
     }
 
+    /// Beginner note: This method is one step in the feature workflow for this file.
+    func testRemoveExternalPluginDeletesManifestAndReloadsCatalog() throws {
+        let context = try makeContext()
+        let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
+
+        let externalManifest = """
+        {
+          "id": "temp-editor",
+          "displayName": "Temp Editor",
+          "priority": 90,
+          "defaultEnabled": false,
+          "launchAttempts": [
+            {
+              "label": "open app",
+              "executable": "/usr/bin/open",
+              "arguments": ["-a", "Temp Editor", "{folderPath}"],
+              "timeoutSeconds": 3
+            }
+          ]
+        }
+        """
+        let externalPath = pluginsDirectory.appendingPathComponent("temp-editor.json")
+        try externalManifest.write(to: externalPath, atomically: true, encoding: .utf8)
+
+        let registry = EditorPluginRegistry(
+            fileManager: .default,
+            userDefaults: context.defaults,
+            appSupportDirectoryURL: context.appSupportDirectory
+        )
+
+        XCTAssertNotNil(registry.plugin(id: "temp-editor"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: externalPath.path))
+
+        _ = try registry.removeExternalPlugin(pluginID: "temp-editor")
+
+        XCTAssertNil(registry.plugin(id: "temp-editor"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: externalPath.path))
+    }
+
     /// Beginner note: This helper centralizes temporary context setup for registry tests.
     private func makeContext() throws -> (appSupportDirectory: URL, defaults: UserDefaults) {
         let tempRoot = FileManager.default.temporaryDirectory
