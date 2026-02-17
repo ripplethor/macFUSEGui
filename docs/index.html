@@ -73,45 +73,11 @@
         })();
     </script>
 
-    <!-- Tailwind v4 via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa',
-                            500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a',
-                        }
-                    },
-                    letterSpacing: {
-                        tighter: '-0.04em',
-                        tight: '-0.02em',
-                        normal: '0',
-                        wide: '0.02em',
-                        wider: '0.04em',
-                        widest: '0.08em',
-                    },
-                    animation: {
-                        'gradient-text': 'gradient-text 8s ease infinite',
-                        'shimmer': 'shimmer 1.5s infinite',
-                    },
-                    keyframes: {
-                        'gradient-text': {
-                            '0%, 100%': { 'background-position': '0% 50%' },
-                            '50%': { 'background-position': '100% 50%' },
-                        },
-                        'shimmer': {
-                            '0%': { 'transform': 'translateX(-100%)' },
-                            '100%': { 'transform': 'translateX(100%)' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Tailwind v4 browser runtime -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @custom-variant dark (&:where(.dark, .dark *));
+    </style>
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="assets/site.css">
