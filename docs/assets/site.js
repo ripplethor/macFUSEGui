@@ -10,6 +10,7 @@ const footerGithubBtn = document.getElementById("footer-github-btn");
 const yearSpan = document.getElementById("current-year");
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let themeTransitionTimer = 0;
 if (!prefersReducedMotion.matches) {
     root.classList.add("motion-enabled");
 }
@@ -32,9 +33,27 @@ function initTheme() {
 }
 
 function toggleTheme() {
-    const isDark = root.classList.toggle("dark");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
+    const nextIsDark = !root.classList.contains("dark");
+
+    if (prefersReducedMotion.matches) {
+        root.classList.toggle("dark", nextIsDark);
+        localStorage.setItem("theme", nextIsDark ? "dark" : "light");
+        updateThemeUI();
+        return;
+    }
+
+    window.clearTimeout(themeTransitionTimer);
+    root.classList.add("theme-transitioning");
+    // Force style flush so transition styles are active before theme class flips.
+    void root.offsetWidth;
+
+    root.classList.toggle("dark", nextIsDark);
+    localStorage.setItem("theme", nextIsDark ? "dark" : "light");
     updateThemeUI();
+
+    themeTransitionTimer = window.setTimeout(() => {
+        root.classList.remove("theme-transitioning");
+    }, 460);
 }
 
 function updateThemeUI() {
