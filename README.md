@@ -35,7 +35,7 @@
 
 ```bash
 brew install --cask macfuse
-brew install sshfs-mac
+brew install gromgit/fuse/sshfs-mac
 ```
 
 Expected `sshfs` search order:
@@ -243,7 +243,7 @@ Recovery contract:
 
 ```bash
 brew install --cask macfuse
-brew install sshfs-mac
+brew install gromgit/fuse/sshfs-mac
 ```
 
 ### xcodebuild first-launch issues
@@ -300,3 +300,7 @@ log stream --style compact --predicate 'process == "macfuseGui"' \
 Interpretation:
 - Healthy parallelism: different remotes show overlapping `probe start/end op=sshfs-connect` windows.
 - Funnel warning: one remote repeatedly waits with high `queueDelayMs` before `actor enter`.
+
+## License
+
+macfuseGui is licensed under GPLv3. If you distribute a modified version, you must also distribute the source under GPLv3.
