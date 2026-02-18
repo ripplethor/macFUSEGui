@@ -85,7 +85,7 @@ html[data-fx-mode="lite"] .space-canvas {
 }
 
 html.dark[data-fx-mode="lite"] .space-canvas {
-    opacity: 0.76;
+    opacity: 0.90;
 }
 
 html[data-fx-mode="lite"] .space-dust,
@@ -115,20 +115,25 @@ html[data-fx-mode="lite"] .starfield-mid {
 }
 
 html.dark[data-fx-mode="lite"] .starfield-far {
-    opacity: 0.28;
+    opacity: 0.38;
 }
 
 html.dark[data-fx-mode="lite"] .starfield-mid {
-    opacity: 0.34;
+    opacity: 0.46;
 }
 
 html.dark[data-fx-mode="lite"] .nebula-cloud {
     opacity: 0.40;
 }
 
+html.dark[data-fx-mode="lite"] .starfield-near {
+    display: block;
+    opacity: 0.34;
+}
+
 html.dark[data-fx-mode="lite"] .star-glints {
     display: block;
-    opacity: 0.30;
+    opacity: 0.34;
 }
 
 html[data-fx-mode="lite"] .glass-panel {
