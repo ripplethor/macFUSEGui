@@ -134,18 +134,6 @@ function setupLinks() {
     }
 }
 
-function markDecorativeSvgsAriaHidden() {
-    const svgs = Array.from(document.querySelectorAll("svg"));
-    for (const svg of svgs) {
-        if (svg.hasAttribute("aria-hidden")) continue;
-        if (svg.hasAttribute("aria-label")) continue;
-        if (svg.hasAttribute("role")) continue;
-        if (svg.querySelector("title, desc")) continue;
-        svg.setAttribute("aria-hidden", "true");
-        svg.setAttribute("focusable", "false");
-    }
-}
-
 function setYear() {
     if (yearSpan) {
         yearSpan.textContent = String(new Date().getFullYear());
@@ -389,7 +377,6 @@ document.addEventListener("DOMContentLoaded", () => {
     initFxMode();
     initTheme();
     setupLinks();
-    markDecorativeSvgsAriaHidden();
     setYear();
     setupVisibilityPerformance();
     setupAccordion();

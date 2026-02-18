@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>macfuseGui - Elegant SSHFS Management for macOS</title>
+    <title>macFUSEGui - Elegant SSHFS Management for macOS</title>
     <meta name="description"
         content="A premium, native-feeling macOS menu bar app for managing SSHFS mounts. Secure, reliable, with separate Apple Silicon and Intel builds.">
-    <link rel="canonical" href="https://www.macfusegui.app/">
+    <link rel="canonical" href="https://www.macFUSEgui.app/">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#123677">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#071330">
 
@@ -20,42 +20,42 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.macfusegui.app/">
-    <meta property="og:title" content="macfuseGui - Elegant SSHFS for macOS">
+    <meta property="og:url" content="https://www.macFUSEgui.app/">
+    <meta property="og:title" content="macFUSEGui - Elegant SSHFS for macOS">
     <meta property="og:description"
         content="Secure, reliable remote filesystem mounting. Separate Apple Silicon and Intel builds. Manage multiple connections with a native menu bar experience.">
-    <meta property="og:image" content="https://www.macfusegui.app/assets/og-image.webp">
+    <meta property="og:image" content="https://www.macFUSEgui.app/assets/og-image.webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:type" content="image/webp">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://www.macfusegui.app/">
-    <meta property="twitter:title" content="macfuseGui - Elegant SSHFS for macOS">
+    <meta property="twitter:url" content="https://www.macFUSEgui.app/">
+    <meta property="twitter:title" content="macFUSEGui - Elegant SSHFS for macOS">
     <meta property="twitter:description"
         content="Secure, reliable remote filesystem mounting. Separate Apple Silicon and Intel builds.">
-    <meta property="twitter:image" content="https://www.macfusegui.app/assets/og-image.webp">
-    <meta property="twitter:image:alt" content="macfuseGui app icon and tagline on a dark nebula background">
+    <meta property="twitter:image" content="https://www.macFUSEgui.app/assets/og-image.webp">
+    <meta property="twitter:image:alt" content="macFUSEGui app icon and tagline on a dark nebula background">
 
     <!-- Structured Data -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      "name": "macfuseGui",
+      "name": "macFUSEGui",
       "operatingSystem": "macOS",
       "applicationCategory": "UtilitiesApplication",
       "sameAs": [
-        "https://github.com/ripplethor/macfuseGUI"
+        "https://github.com/ripplethor/macFUSEGUI"
       ],
-      "downloadUrl": "https://github.com/ripplethor/macfuseGUI/releases/latest",
+      "downloadUrl": "https://github.com/ripplethor/macFUSEGUI/releases/latest",
       "offers": {
         "@type": "Offer",
         "price": "0",
         "priceCurrency": "USD"
       },
-      "description": "A native macOS menu bar app for managing SSHFS mounts with ease."
+      "description": "A native macOS menu bar app for managing SSHFS mounts with macFUSE and sshfs."
     }
     </script>
 
@@ -118,7 +118,7 @@
                     <div class="relative w-9 h-9 rounded-xl ring-1 ring-white/25 shadow-[0_8px_20px_rgba(8,25,66,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
                         <img src="assets/brand-icon.webp" alt="" class="w-full h-full object-cover" />
                     </div>
-                    <span class="font-bold text-xl tracking-tight text-gray-900 dark:text-white">macfuse<span
+                    <span class="font-bold text-xl tracking-tight text-gray-900 dark:text-white">macFUSE<span
                             class="text-blue-600 dark:text-blue-400">Gui</span></span>
                 </div>
 
@@ -142,13 +142,13 @@
                     aria-label="Toggle Theme">
                     <span id="theme-toggle-label" class="sr-only">Switch to Dark Mode</span>
                     <!-- Sun Icon -->
-                    <svg class="w-5 h-5 hidden dark:block text-yellow-400 transition-transform hover:rotate-90"
+                    <svg aria-hidden="true" focusable="false" class="w-5 h-5 hidden dark:block text-yellow-400 transition-transform hover:rotate-90"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                     <!-- Moon Icon -->
-                    <svg class="w-5 h-5 block dark:hidden text-gray-600 transition-transform hover:-rotate-12"
+                    <svg aria-hidden="true" focusable="false" class="w-5 h-5 block dark:hidden text-gray-600 transition-transform hover:-rotate-12"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
@@ -174,14 +174,14 @@
                         class="mt-6 max-w-2xl mx-auto text-xl sm:text-2xl text-gray-600 dark:text-gray-300 mb-12 font-medium leading-relaxed">
                         Stop typing <code
                             class="bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono text-blue-600 dark:text-blue-400">mount</code>
-                        commands; macfuseGui uses macFUSE + sshfs to mount SSHFS on macOS, with separate Apple Silicon
+                        commands; macFUSEGui uses macFUSE + sshfs to mount SSHFS on macOS, with separate Apple Silicon
                         (arm64) and Intel (x86_64) builds.
                     </p>
 
                     <div class="mt-10 flex justify-center gap-4 mb-20">
-                        <a id="download-btn" href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                        <a id="download-btn" href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
                             class="px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] transition-all duration-300 flex items-center group">
-                            <svg class="w-6 h-6 mr-2 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24"
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6 mr-2 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -190,9 +190,9 @@
                                 Download DMG
                             </span>
                         </a>
-                        <a id="github-btn" href="https://github.com/ripplethor/macfuseGUI"
+                        <a id="github-btn" href="https://github.com/ripplethor/macFUSEGUI"
                             class="px-8 py-4 rounded-full glass-panel text-gray-900 dark:text-white font-semibold text-lg hover:bg-white/40 dark:hover:bg-gray-800/60 transition-all duration-300 flex items-center border border-gray-200 dark:border-white/10">
-                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                 <path fill-rule="evenodd"
                                     d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
                                     clip-rule="evenodd" />
@@ -212,7 +212,7 @@
                         <div
                             class="absolute top-0 w-full h-8 bg-black/40 backdrop-blur-md flex justify-between items-center px-4 z-50 text-white text-xs font-medium border-b border-white/5">
                             <div class="flex items-center space-x-4">
-                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                <svg aria-hidden="true" focusable="false" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                     <path
                                         d="M12 17.27L18.18 21L16.54 13.97L22 9.24L14.81 8.63L12 2L9.19 8.63L2 9.24L7.46 13.97L5.82 21L12 17.27Z" />
                                 </svg>
@@ -224,7 +224,7 @@
                             </div>
                             <div class="flex items-center space-x-4">
                                 <!-- Status Icons -->
-                                <svg class="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg aria-hidden="true" focusable="false" class="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                                 </svg>
@@ -232,7 +232,7 @@
                                 <!-- App Icon Active -->
                                 <div
                                     class="w-6 h-6 bg-blue-500/20 rounded flex items-center justify-center border border-blue-500/40 relative">
-                                    <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24"
+                                    <svg aria-hidden="true" focusable="false" class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24"
                                         stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -250,7 +250,7 @@
                                 <div
                                     class="bg-[#252526] px-4 py-3 border-b border-black/20 flex justify-between items-center">
                                     <div class="text-white font-bold text-sm tracking-tight flex items-center"><span
-                                            class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>macfuseGui</div>
+                                            class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>macFUSEGui</div>
                                     <div class="text-[10px] text-gray-500 font-mono">v2.1.0</div>
                                 </div>
                                 <!-- App List -->
@@ -302,7 +302,7 @@
                                     <div class="w-3 h-3 rounded-full bg-[#FEBC2E]"></div>
                                     <div class="w-3 h-3 rounded-full bg-[#28C840]"></div>
                                 </div>
-                                <span class="text-gray-400 text-xs font-medium">index.ts - macfuseGui - Visual
+                                <span class="text-gray-400 text-xs font-medium">index.ts - macFUSEGui - Visual
                                     Studio Code</span>
                             </div>
 
@@ -312,17 +312,17 @@
                                 <div
                                     class="w-12 bg-[#333333] flex flex-col items-center py-4 space-y-4 border-r border-black/20 shrink-0">
                                     <!-- Files Icon -->
-                                    <svg class="w-6 h-6 text-white opacity-90 border-l-2 border-white pl-1" fill="none"
+                                    <svg aria-hidden="true" focusable="false" class="w-6 h-6 text-white opacity-90 border-l-2 border-white pl-1" fill="none"
                                         viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
-                                    <svg class="w-6 h-6 text-gray-500 hover:text-white" fill="none" viewBox="0 0 24 24"
+                                    <svg aria-hidden="true" focusable="false" class="w-6 h-6 text-gray-500 hover:text-white" fill="none" viewBox="0 0 24 24"
                                         stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
-                                    <svg class="w-6 h-6 text-gray-500 hover:text-white" fill="none" viewBox="0 0 24 24"
+                                    <svg aria-hidden="true" focusable="false" class="w-6 h-6 text-gray-500 hover:text-white" fill="none" viewBox="0 0 24 24"
                                         stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -335,11 +335,11 @@
                                     <div class="uppercase text-[10px] font-bold mb-2 tracking-wider pl-2">Explorer
                                     </div>
                                     <div class="pl-2 mb-1 flex items-center font-bold text-gray-300">
-                                        <svg class="w-3 h-3 mr-1 transform rotate-90" fill="currentColor"
+                                        <svg aria-hidden="true" focusable="false" class="w-3 h-3 mr-1 transform rotate-90" fill="currentColor"
                                             viewBox="0 0 20 20">
                                             <path d="M5 10l10-10v20z" />
                                         </svg>
-                                        MACFUSE-GUI
+                                        macFUSE-GUI
                                     </div>
                                     <div class="pl-6 space-y-1">
                                         <div
@@ -359,7 +359,7 @@
                                     <div class="uppercase text-[10px] font-bold mt-4 mb-2 tracking-wider pl-2">
                                         MOUNTS</div>
                                     <div class="pl-2 mb-1 flex items-center text-green-400 font-bold">
-                                        <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg aria-hidden="true" focusable="false" class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                                         </svg>
@@ -386,7 +386,7 @@
                                         <div
                                             class="px-4 h-full bg-[#1e1e1e] flex items-center border-t-2 border-blue-500 text-white">
                                             <span class="mr-2 text-yellow-500">TS</span> index.ts
-                                            <svg class="w-3 h-3 ml-2 text-gray-500 hover:text-white" fill="none"
+                                            <svg aria-hidden="true" focusable="false" class="w-3 h-3 ml-2 text-gray-500 hover:text-white" fill="none"
                                                 viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                     d="M6 18L18 6M6 6l12 12" />
@@ -397,7 +397,7 @@
                                     <!-- Code Content -->
                                     <div class="flex-1 p-4 overflow-auto">
                                         <pre class="font-mono text-[13px] leading-relaxed text-gray-300">
-<span class="text-gray-600 select-none mr-4"> 1</span><span class="text-pink-400">import</span> { <span class="text-yellow-300">FileSystem</span>, <span class="text-yellow-300">MountOptions</span> } <span class="text-pink-400">from</span> <span class="text-green-400">'@macfuse/core'</span>;
+<span class="text-gray-600 select-none mr-4"> 1</span><span class="text-pink-400">import</span> { <span class="text-yellow-300">FileSystem</span>, <span class="text-yellow-300">MountOptions</span> } <span class="text-pink-400">from</span> <span class="text-green-400">'@macFUSE/core'</span>;
 <span class="text-gray-600 select-none mr-4"> 2</span>
 <span class="text-gray-600 select-none mr-4"> 3</span><span class="text-gray-500">// Initialize sophisticated handshake</span>
 <span class="text-gray-600 select-none mr-4"> 4</span><span class="text-pink-400">export class</span> <span class="text-yellow-300">ConnectionManager</span> {
@@ -420,12 +420,12 @@
                             <div
                                 class="h-6 bg-[#007acc] text-white flex items-center px-3 text-[10px] justify-between z-50 shrink-0">
                                 <div class="flex items-center space-x-3">
-                                    <div class="flex items-center"><svg class="w-3 h-3 mr-1" fill="none"
+                                    <div class="flex items-center"><svg aria-hidden="true" focusable="false" class="w-3 h-3 mr-1" fill="none"
                                             viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M13 10V3L4 14h7v7l9-11h-7z" />
                                         </svg> master*</div>
-                                    <div class="flex items-center"><svg class="w-3 h-3 mr-1" fill="none"
+                                    <div class="flex items-center"><svg aria-hidden="true" focusable="false" class="w-3 h-3 mr-1" fill="none"
                                             viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -435,7 +435,7 @@
                                     <span>Ln 12, Col 48</span>
                                     <span>UTF-8</span>
                                     <span>TypeScript React</span>
-                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg aria-hidden="true" focusable="false" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                     </svg>
@@ -455,7 +455,7 @@
                     <div class="reveal-on-scroll text-center p-4 group">
                         <div
                             class="w-16 h-16 mx-auto bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center mb-6 text-blue-600 dark:text-blue-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                     d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
@@ -468,7 +468,7 @@
                     <div class="reveal-on-scroll delay-100 text-center p-4 group">
                         <div
                             class="w-16 h-16 mx-auto bg-green-50 dark:bg-green-900/20 rounded-2xl flex items-center justify-center mb-6 text-green-600 dark:text-green-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -481,7 +481,7 @@
                     <div class="reveal-on-scroll delay-200 text-center p-4 group">
                         <div
                             class="w-16 h-16 mx-auto bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mb-6 text-purple-600 dark:text-purple-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                     d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
@@ -494,7 +494,7 @@
                     <div class="reveal-on-scroll delay-300 text-center p-4 group">
                         <div
                             class="w-16 h-16 mx-auto bg-orange-50 dark:bg-orange-900/20 rounded-2xl flex items-center justify-center mb-6 text-orange-600 dark:text-orange-400 shadow-sm group-hover:scale-110 transition-transform duration-300">
-                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                     d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                             </svg>
@@ -522,7 +522,7 @@
                         class="reveal-on-scroll glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                         <div
                             class="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 rounded-xl mb-6 flex items-center justify-center text-blue-600 dark:text-blue-300 group-hover:scale-110 transition-transform">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                             </svg>
@@ -536,7 +536,7 @@
                         class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                         <div
                             class="w-12 h-12 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl mb-6 flex items-center justify-center text-indigo-600 dark:text-indigo-300 group-hover:scale-110 transition-transform">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                             </svg>
@@ -550,7 +550,7 @@
                         class="reveal-on-scroll delay-200 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                         <div
                             class="w-12 h-12 bg-pink-100 dark:bg-pink-500/20 rounded-xl mb-6 flex items-center justify-center text-pink-600 dark:text-pink-300 group-hover:scale-110 transition-transform">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                             </svg>
@@ -564,7 +564,7 @@
                         class="reveal-on-scroll glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                         <div
                             class="w-12 h-12 bg-teal-100 dark:bg-teal-500/20 rounded-xl mb-6 flex items-center justify-center text-teal-600 dark:text-teal-300 group-hover:scale-110 transition-transform">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
@@ -578,7 +578,7 @@
                         class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                         <div
                             class="w-12 h-12 bg-amber-100 dark:bg-amber-500/20 rounded-xl mb-6 flex items-center justify-center text-amber-600 dark:text-amber-300 group-hover:scale-110 transition-transform">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
@@ -592,7 +592,7 @@
                         class="reveal-on-scroll delay-200 glass-panel p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                         <div
                             class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-xl mb-6 flex items-center justify-center text-gray-600 dark:text-gray-300 group-hover:scale-110 transition-transform">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg aria-hidden="true" focusable="false" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                             </svg>
@@ -621,7 +621,7 @@
 	                    <div
 	                        class="bg-white/80 dark:bg-black/40 backdrop-blur-md rounded-xl p-8 border border-yellow-400/30 dark:border-yellow-500/30">
 	                        <h3 class="text-xl font-bold text-yellow-800 dark:text-yellow-400 mb-4 flex items-center">
-	                            <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+	                            <svg aria-hidden="true" focusable="false" class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
@@ -632,9 +632,9 @@
 	                            launch, macOS will show a warning and you will need to allow it to run via System
 	                            Settings.
                                 The source code is on
-                                <a href="https://github.com/ripplethor/macfuseGUI" class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">GitHub</a>
+                                <a href="https://github.com/ripplethor/macFUSEGUI" class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">GitHub</a>
                                 and release artifacts are on
-                                <a href="https://github.com/ripplethor/macfuseGUI/releases/latest" class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">Releases</a>.
+                                <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest" class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">Releases</a>.
 	                        </p>
 	                    </div>
 	                </div>
@@ -643,11 +643,17 @@
                         <div class="reveal-on-scroll glass-panel p-8 rounded-3xl shadow-sm">
                             <h3 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Prerequisites</h3>
                             <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
-                                Install macFUSE and sshfs on macOS:
+                                Install macFUSE and sshfs on macOS (Homebrew):
                             </p>
                             <div class="mt-5 rounded-2xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-hidden">
-                                <pre class="p-5 text-sm leading-relaxed overflow-x-auto"><code class="font-mono">brew install --cask macfuse
-brew install sshfs-mac</code></pre>
+                                <pre class="p-5 text-sm leading-relaxed overflow-x-auto"><code class="font-mono">brew install --cask macFUSE
+brew install gromgit/fuse/sshfs-mac</code></pre>
+                            </div>
+                            <p class="mt-5 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                If you already use the Homebrew core formula on your setup, you can also try:
+                            </p>
+                            <div class="mt-3 rounded-2xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-hidden">
+                                <pre class="p-5 text-sm leading-relaxed overflow-x-auto"><code class="font-mono">brew install sshfs</code></pre>
                             </div>
                         </div>
                         <div class="reveal-on-scroll delay-100 glass-panel p-8 rounded-3xl shadow-sm">
@@ -665,18 +671,18 @@ brew install sshfs-mac</code></pre>
                                 <code class="font-mono text-sm">-macos-x86_64.dmg</code>.
                             </p>
                             <div class="mt-6 flex flex-col sm:flex-row gap-3">
-                                <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                                <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
                                     class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-[0_0_18px_rgba(37,99,235,0.35)] transition-colors text-center">
                                     Apple Silicon (arm64)
                                 </a>
-                                <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                                <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
                                     class="px-5 py-3 rounded-2xl glass-panel text-gray-900 dark:text-white font-semibold hover:bg-white/40 dark:hover:bg-gray-800/60 transition-colors text-center border border-gray-200 dark:border-white/10">
                                     Intel (x86_64)
                                 </a>
                             </div>
                             <p class="mt-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                                Release page: <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
-                                    class="underline underline-offset-4 decoration-blue-500/50 hover:decoration-blue-500">https://github.com/ripplethor/macfuseGUI/releases/latest</a>
+                                Release page: <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                                    class="underline underline-offset-4 decoration-blue-500/50 hover:decoration-blue-500">https://github.com/ripplethor/macFUSEGUI/releases/latest</a>
                             </p>
                         </div>
                     </div>
@@ -735,7 +741,7 @@ brew install sshfs-mac</code></pre>
                     <div class="text-center mb-16 reveal-on-scroll">
                         <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">How it works</h2>
                         <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                            macfuseGui is a native menu bar app that orchestrates sshfs and macFUSE so remote folders
+                            macFUSEGui is a native menu bar app that orchestrates sshfs and macFUSE so remote folders
                             mount like normal directories in Finder and your editor.
                         </p>
                     </div>
@@ -744,7 +750,7 @@ brew install sshfs-mac</code></pre>
                         <ul class="space-y-5 text-gray-700 dark:text-gray-300 leading-relaxed">
                             <li>
                                 <strong class="text-gray-900 dark:text-white">Orchestrates sshfs:</strong>
-                                macfuseGui builds safe mount commands and manages connect, disconnect, and recovery.
+                                macFUSEGui builds safe mount commands and manages connect, disconnect, and recovery.
                             </li>
                             <li>
                                 <strong class="text-gray-900 dark:text-white">macFUSE provides the filesystem layer:</strong>
@@ -757,7 +763,7 @@ brew install sshfs-mac</code></pre>
                             <li>
                                 <strong class="text-gray-900 dark:text-white">Config is JSON:</strong>
                                 non-secret remote settings are stored in
-                                <code class="font-mono text-sm">~/Library/Application Support/macfuseGui/remotes.json</code>.
+                                <code class="font-mono text-sm">~/Library/Application Support/macFUSEGui/remotes.json</code>.
                             </li>
                         </ul>
                     </div>
@@ -783,7 +789,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-1">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Do I need to install
                                 macFUSE and sshfs?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -791,7 +797,7 @@ brew install sshfs-mac</code></pre>
                         </button>
                         <div id="faq-1" class="hidden px-8 pb-6 pt-0 text-gray-600 dark:text-gray-400 leading-relaxed"
                             data-accordion-panel role="region" aria-labelledby="faq-trigger-1" hidden>
-                            Yes. macfuseGui is the control plane and UX layer. It relies on macFUSE and sshfs for the
+                            Yes. macFUSEGui is the control plane and UX layer. It relies on macFUSE and sshfs for the
                             actual mount transport.
                         </div>
                     </div>
@@ -803,7 +809,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-2">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">How does authentication
                                 work?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -823,7 +829,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-3">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Can it manage multiple
                                 remotes at once?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -843,7 +849,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-4">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">What happens after
                                 sleep/wake or network drops?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -863,7 +869,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-5">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Can I choose local mount
                                 folders?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -883,7 +889,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-6">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Is there built-in
                                 diagnostics?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -903,7 +909,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-7">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Why does macOS warn on
                                 first launch?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -923,7 +929,7 @@ brew install sshfs-mac</code></pre>
                             data-accordion-trigger aria-expanded="false" aria-controls="faq-8">
                             <span class="font-bold text-lg text-gray-900 dark:text-gray-100">Can I open mounted paths
                                 directly in code editors?</span>
-                            <svg class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
+                            <svg aria-hidden="true" focusable="false" class="w-5 h-5 text-gray-500 transform transition-transform duration-300" fill="none"
                                 viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M19 9l-7 7-7-7" />
@@ -944,15 +950,15 @@ brew install sshfs-mac</code></pre>
     <footer class="bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-white/5 py-16">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
             <div class="mb-4 md:mb-0 text-center md:text-left">
-                <span class="font-bold text-xl text-gray-900 dark:text-white tracking-tight">macfuseGui</span>
+                <span class="font-bold text-xl text-gray-900 dark:text-white tracking-tight">macFUSEGui</span>
                 <p class="text-sm text-gray-600 dark:text-gray-300 mt-2">&copy; <span id="current-year">2026</span>
-                    macfuseGui. Open Source Contributors.</p>
+                    macFUSEGui. Open Source Contributors.</p>
             </div>
             <div class="flex space-x-8">
-                <a id="footer-github-btn" href="https://github.com/ripplethor/macfuseGUI"
+                <a id="footer-github-btn" href="https://github.com/ripplethor/macFUSEGUI"
                     class="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300 transform hover:scale-110">
                     <span class="sr-only">GitHub</span>
-                    <svg class="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+                    <svg aria-hidden="true" focusable="false" class="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
                         <path fill-rule="evenodd"
                             d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
                             clip-rule="evenodd" />
