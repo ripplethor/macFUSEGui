@@ -4,6 +4,7 @@
 
 - macOS 13+
 - Apple Silicon first (`arm64`), Intel supported (`ARCH_OVERRIDE=x86_64`)
+- Release flow defaults to dual-arch artifacts (`ARCH_OVERRIDE=both`)
 - `NSStatusItem` menu bar UX, no Dock icon (`LSUIElement=true`)
 - SwiftUI settings + AppKit menu bar integration
 
@@ -112,16 +113,26 @@ From repo root:
 ```
 
 `build.sh` includes a pre-step:
-- `./scripts/build_libssh2.sh`
+- `ARCH_OVERRIDE=<arch> ./scripts/build_libssh2.sh`
 
-This prepares third-party libssh2 artifacts in:
-- `build/third_party/libssh2`
+Supported `ARCH_OVERRIDE` values:
+- `arm64`
+- `x86_64`
+- `both`
+- `universal`
 
-Output app path:
-- `build/macfuseGui.app`
+Third-party output roots are arch-specific:
+- `build/third_party/openssl-arm64`, `build/third_party/openssl-x86_64`, `build/third_party/openssl-universal`
+- `build/third_party/libssh2-arm64`, `build/third_party/libssh2-x86_64`, `build/third_party/libssh2-universal`
 
-Derived data:
-- `build/DerivedData`
+App output paths:
+- Single-arch (`arm64`, `x86_64`, `universal`): `build/macfuseGui.app`
+- Dual-arch (`both`): `build/macfuseGui-arm64.app` and `build/macfuseGui-x86_64.app`
+
+DerivedData roots:
+- `build/DerivedData-arm64`
+- `build/DerivedData-x86_64`
+- `build/DerivedData-universal`
 
 ## Make Targets
 
@@ -137,11 +148,31 @@ make clean
 # Intel build
 ARCH_OVERRIDE=x86_64 ./scripts/build.sh
 
+# Build separate arm64 + x86_64 apps
+ARCH_OVERRIDE=both ./scripts/build.sh
+
+# Universal app build
+ARCH_OVERRIDE=universal ./scripts/build.sh
+
 # Release build
 CONFIGURATION=Release ./scripts/build.sh
 
 # Allow signing if needed
 CODE_SIGNING_ALLOWED=YES ./scripts/build.sh
+```
+
+## Release
+
+```bash
+# Default release mode is dual-arch (both)
+./scripts/release.sh
+
+# Verify dual-arch release actions without publishing
+ARCH_OVERRIDE=both ./scripts/release.sh --dry-run
+
+# Force a single-arch release if needed
+ARCH_OVERRIDE=arm64 ./scripts/release.sh
+ARCH_OVERRIDE=x86_64 ./scripts/release.sh
 ```
 
 ## Xcode CLI Fallback

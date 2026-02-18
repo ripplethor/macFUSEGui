@@ -463,16 +463,39 @@ Primary scripts:
 - `scripts/run.sh`
 - `scripts/clean.sh`
 - `scripts/build_libssh2.sh`
+- `scripts/release.sh`
+
+Build arch modes:
+- `ARCH_OVERRIDE=arm64|x86_64|both|universal`
+- `scripts/build.sh` defaults to `arm64`
+- `scripts/release.sh` defaults to `both` (publishes separate arm64 and x86_64 DMGs)
 
 libssh2 prep:
-- Output: `build/third_party/libssh2`
-- OpenSSL output: `build/third_party/openssl`
-- `scripts/build_libssh2.sh` now builds both OpenSSL and libssh2 from source for the active arch/deployment target
+- Output roots:
+  - `build/third_party/libssh2-arm64`
+  - `build/third_party/libssh2-x86_64`
+  - `build/third_party/libssh2-universal`
+- OpenSSL output roots:
+  - `build/third_party/openssl-arm64`
+  - `build/third_party/openssl-x86_64`
+  - `build/third_party/openssl-universal`
+- `scripts/build_libssh2.sh` builds OpenSSL and libssh2 from source for the active arch/deployment target
+- Single-arch `x86_64` third-party builds run under Rosetta on Apple Silicon (`arch -x86_64`)
 - Source tarballs are cached under `third_party/src` (`openssl-<version>.tar.gz`, `libssh2-<version>.tar.gz`) and auto-downloaded if missing
 - Build artifacts are cached by a fingerprint (`version`, `arch`, `min target`) so repeated builds are fast
+- `scripts/build.sh` also updates compatibility symlinks:
+  - `build/third_party/openssl` -> selected `openssl-<arch>`
+  - `build/third_party/libssh2` -> selected `libssh2-<arch>`
 
 App output:
-- `build/macfuseGui.app`
+- Single-arch modes (`arm64`, `x86_64`, `universal`): `build/macfuseGui.app`
+- Dual-arch mode (`both`):
+  - `build/macfuseGui-arm64.app`
+  - `build/macfuseGui-x86_64.app`
+- DerivedData roots are arch-specific:
+  - `build/DerivedData-arm64`
+  - `build/DerivedData-x86_64`
+  - `build/DerivedData-universal`
 
 Tests:
 - `xcodebuild ... test CODE_SIGNING_ALLOWED=NO`
