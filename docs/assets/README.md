@@ -10,6 +10,8 @@ This directory contains the static assets for the `macfuseGui` marketing website
   - Dynamic GitHub repo links (configured via `const REPO`).
   - FAQ accordion behavior (ARIA-compliant).
   - Copyright year auto-update.
+- `hero-bg.webp`: Local hero background image (Unsplash source, converted to WebP for performance).
+- `og-image.webp`: Social preview image in WebP format.
 
 ## Configuration
 
