@@ -9,11 +9,11 @@ body {
 
 /* Elite Glassmorphism */
 .glass-panel {
-    background: rgba(255, 255, 255, 0.65);
+    background: rgba(255, 255, 255, 0.82);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    box-shadow: 0 10px 34px 0 rgba(22, 51, 116, 0.10);
 }
 
 .dark .glass-panel {
@@ -45,6 +45,11 @@ header[data-scrolled="true"] {
 .space-canvas {
     overflow: hidden;
     isolation: isolate;
+    opacity: 0.78;
+}
+
+.dark .space-canvas {
+    opacity: 1;
 }
 
 .space-canvas > div {
@@ -54,10 +59,10 @@ header[data-scrolled="true"] {
 
 .space-gradient {
     background:
-        radial-gradient(88% 62% at 20% 8%, rgba(69, 113, 232, 0.23), transparent 68%),
-        radial-gradient(84% 58% at 82% 10%, rgba(100, 88, 218, 0.21), transparent 70%),
-        radial-gradient(94% 70% at 52% 86%, rgba(30, 74, 184, 0.26), transparent 72%),
-        linear-gradient(180deg, #030712 0%, #06102a 44%, #0a1a3f 74%, #102b63 100%);
+        radial-gradient(88% 64% at 22% 6%, rgba(72, 125, 240, 0.32), transparent 70%),
+        radial-gradient(86% 60% at 82% 10%, rgba(114, 99, 235, 0.24), transparent 72%),
+        radial-gradient(94% 74% at 52% 88%, rgba(52, 107, 224, 0.20), transparent 74%),
+        linear-gradient(180deg, #f4f8ff 0%, #e7f0ff 38%, #d7e8ff 72%, #c7defc 100%);
 }
 
 .dark .space-gradient {
@@ -118,7 +123,7 @@ header[data-scrolled="true"] {
     background-size: 340px 340px, 100% 100%, 100% 100%;
     background-repeat: repeat, no-repeat, no-repeat;
     mix-blend-mode: overlay;
-    opacity: 0.20;
+    opacity: 0.10;
     animation: dust-drift 95s linear infinite;
 }
 
@@ -188,7 +193,7 @@ header[data-scrolled="true"] {
         radial-gradient(circle at 55.03% 5.06%, rgba(226, 240, 255, 0.411) 0 0.95px, transparent 1.90px),
         radial-gradient(circle at 96.90% 92.64%, rgba(226, 240, 255, 0.210) 0 0.87px, transparent 1.75px),
         radial-gradient(circle at 48.56% 21.37%, rgba(226, 240, 255, 0.178) 0 0.65px, transparent 1.30px);
-    opacity: 0.42;
+    opacity: 0.16;
     filter: blur(0.18px);
     animation: star-drift-far 220s linear infinite;
 }
@@ -229,7 +234,7 @@ header[data-scrolled="true"] {
         radial-gradient(circle at 78.74% 10.81%, rgba(226, 240, 255, 0.592) 0 1.18px, transparent 2.36px),
         radial-gradient(circle at 22.24% 81.66%, rgba(226, 240, 255, 0.404) 0 0.95px, transparent 1.91px),
         radial-gradient(circle at 79.53% 22.76%, rgba(226, 240, 255, 0.366) 0 0.71px, transparent 1.43px);
-    opacity: 0.52;
+    opacity: 0.22;
     filter: drop-shadow(0 0 5px rgba(191, 219, 254, 0.18));
     animation: star-drift-mid 165s linear infinite, twinkle-mid 9s ease-in-out infinite;
 }
@@ -254,7 +259,7 @@ header[data-scrolled="true"] {
         radial-gradient(circle at 79.60% 16.97%, rgba(226, 240, 255, 0.747) 0 1.08px, transparent 2.15px),
         radial-gradient(circle at 63.29% 33.52%, rgba(226, 240, 255, 0.851) 0 1.74px, transparent 3.47px),
         radial-gradient(circle at 67.28% 22.46%, rgba(226, 240, 255, 0.531) 0 1.18px, transparent 2.36px);
-    opacity: 0.58;
+    opacity: 0.26;
     filter: drop-shadow(0 0 8px rgba(191, 219, 254, 0.28));
     animation: star-drift-near 132s linear infinite, twinkle-near 7.8s ease-in-out infinite;
 }
@@ -267,12 +272,34 @@ header[data-scrolled="true"] {
         radial-gradient(circle at 63% 51%, rgba(255, 244, 214, 0.86) 0 1.4px, rgba(253, 230, 138, 0.30) 3.8px, transparent 8px),
         radial-gradient(circle at 74% 24%, rgba(255, 255, 255, 0.94) 0 1.5px, rgba(147, 197, 253, 0.40) 3.9px, transparent 8px),
         radial-gradient(circle at 89% 72%, rgba(255, 255, 255, 0.90) 0 1.35px, rgba(125, 211, 252, 0.32) 3.5px, transparent 7px);
-    opacity: 0.44;
+    opacity: 0.20;
     filter: blur(0.24px) drop-shadow(0 0 10px rgba(191, 219, 254, 0.25));
     animation: twinkle-glints 6.6s ease-in-out infinite alternate;
 }
 
 .space-vignette {
+    background:
+        radial-gradient(128% 98% at 50% -24%, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.02) 52%, rgba(110, 139, 197, 0.18) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(154, 183, 235, 0.26) 100%);
+}
+
+.dark .starfield-far {
+    opacity: 0.42;
+}
+
+.dark .starfield-mid {
+    opacity: 0.52;
+}
+
+.dark .starfield-near {
+    opacity: 0.58;
+}
+
+.dark .star-glints {
+    opacity: 0.44;
+}
+
+.dark .space-vignette {
     background:
         radial-gradient(126% 96% at 50% -24%, transparent 34%, rgba(1, 4, 14, 0.44) 100%),
         linear-gradient(180deg, rgba(1, 4, 14, 0.08) 0%, rgba(1, 4, 14, 0.52) 100%);
