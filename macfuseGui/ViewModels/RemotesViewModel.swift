@@ -1549,12 +1549,14 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
+        let startedAt = Date()
         diagnostics.append(
             level: .info,
             category: "recovery",
-            message: "Wake preflight cleanup for \(targets.count) desired remote(s)."
+            message: "Wake preflight cleanup for \(targets.count) desired remote(s) (parallel, aggressive unmount)."
         )
 
+        // Cancel any in-flight per-remote operations before cleanup starts.
         for remote in targets {
             if remoteOperations[remote.id] != nil {
                 cancelOperation(
@@ -1564,19 +1566,46 @@ final class RemotesViewModel: ObservableObject {
                     removeFromTable: true
                 )
             }
-
-            let forceStopQueuedAt = Date()
-            logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
-            await mountManager.forceStopProcesses(for: remote, queuedAt: forceStopQueuedAt, operationID: nil)
-
-            let disconnected = RemoteStatus(
-                state: .disconnected,
-                mountedPath: nil,
-                lastError: "Re-establishing connection after wake.",
-                updatedAt: Date()
-            )
-            observeStatus(disconnected, for: remote.id)
         }
+
+        let mountManager = self.mountManager
+        var completedRemoteNames: [String] = []
+
+        await withTaskGroup(of: (UUID, String).self) { group in
+            for remote in targets {
+                let forceStopQueuedAt = Date()
+                logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
+
+                group.addTask {
+                    await mountManager.forceStopProcesses(
+                        for: remote,
+                        queuedAt: forceStopQueuedAt,
+                        operationID: nil,
+                        aggressiveUnmount: true
+                    )
+                    return (remote.id, remote.displayName)
+                }
+            }
+
+            for await (remoteID, remoteName) in group {
+                completedRemoteNames.append(remoteName)
+                let disconnected = RemoteStatus(
+                    state: .disconnected,
+                    mountedPath: nil,
+                    lastError: "Re-establishing connection after wake.",
+                    updatedAt: Date()
+                )
+                observeStatus(disconnected, for: remoteID)
+            }
+        }
+
+        let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
+        let names = completedRemoteNames.sorted().joined(separator: ", ")
+        diagnostics.append(
+            level: .info,
+            category: "recovery",
+            message: "Wake preflight cleanup completed in \(elapsedMs)ms for: \(names)."
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

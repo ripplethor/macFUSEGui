@@ -440,7 +440,8 @@ actor MountManager {
     func forceStopProcesses(
         for remote: RemoteConfig,
         queuedAt: Date = Date(),
-        operationID: UUID? = nil
+        operationID: UUID? = nil,
+        aggressiveUnmount: Bool = false
     ) async {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
         let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
@@ -524,7 +525,11 @@ actor MountManager {
             )
         }
 
-        await forceUnmountMountPoint(remote.localMountPoint, remoteName: remote.displayName)
+        await forceUnmountMountPoint(
+            remote.localMountPoint,
+            remoteName: remote.displayName,
+            aggressive: aggressiveUnmount
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -984,12 +989,20 @@ actor MountManager {
 
     /// Beginner note: This is a bounded, non-recursive emergency cleanup path.
     /// It avoids heavy probe loops and makes stale mount teardown deterministic.
-    private func forceUnmountMountPoint(_ mountPoint: String, remoteName: String) async {
+    private func forceUnmountMountPoint(_ mountPoint: String, remoteName: String, aggressive: Bool = false) async {
         let normalized = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
-        let commands: [(label: String, executable: String, args: [String], timeout: TimeInterval)] = [
-            ("diskutil unmount force", "/usr/sbin/diskutil", ["unmount", "force", normalized], 8),
-            ("umount -f", "/sbin/umount", ["-f", normalized], 4)
-        ]
+        let commands: [(label: String, executable: String, args: [String], timeout: TimeInterval)]
+        if aggressive {
+            commands = [
+                ("diskutil unmount force", "/usr/sbin/diskutil", ["unmount", "force", normalized], 4),
+                ("umount -f", "/sbin/umount", ["-f", normalized], 2)
+            ]
+        } else {
+            commands = [
+                ("diskutil unmount force", "/usr/sbin/diskutil", ["unmount", "force", normalized], 8),
+                ("umount -f", "/sbin/umount", ["-f", normalized], 4)
+            ]
+        }
 
         for command in commands {
             do {
