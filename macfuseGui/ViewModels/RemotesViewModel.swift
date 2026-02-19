@@ -219,6 +219,9 @@ final class RemotesViewModel: ObservableObject {
     private var networkMonitor: NWPathMonitor?
     private var networkReachable: Bool = false
     private var pendingStartupAutoConnectIDs: Set<UUID> = []
+    private var startupAutoConnectInProgress = false
+    private var startupAutoConnectRerunRequested = false
+    private var startupInteractiveUnlockAttempted = false
     private var networkRestoreDebounceTask: Task<Void, Never>?
     private var recoveryMonitoringStarted = false
     private var shutdownInProgress = false
@@ -783,56 +786,78 @@ final class RemotesViewModel: ObservableObject {
     /// Beginner note: Startup auto-connect can be deferred until network becomes reachable.
     /// This helper runs the pending set exactly once per remote.
     private func runPendingStartupAutoConnect(trigger: String) async {
-        let pendingIDs = pendingStartupAutoConnectIDs
-        guard !pendingIDs.isEmpty else {
-            return
-        }
-
-        let launchTargets = remotes.filter { pendingIDs.contains($0.id) }
-        guard !launchTargets.isEmpty else {
-            pendingStartupAutoConnectIDs.removeAll()
-            return
-        }
-
-        if trigger != "startup" {
+        if startupAutoConnectInProgress {
+            startupAutoConnectRerunRequested = true
             diagnostics.append(
-                level: .info,
+                level: .debug,
                 category: "startup",
-                message: "Running deferred startup auto-connect for \(launchTargets.count) remote(s) after \(trigger)."
+                message: "Startup auto-connect already in progress. Scheduling follow-up pass (\(trigger))."
             )
+            return
         }
 
-        let connectTargets = launchTargets.filter { status(for: $0.id).state != .connected }
-        await primeStartupPasswordCache(for: connectTargets)
+        startupAutoConnectInProgress = true
+        defer {
+            startupAutoConnectInProgress = false
+        }
 
-        await withTaskGroup(of: Void.self) { group in
-            for remote in launchTargets {
-                group.addTask { @MainActor [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    guard self.remotes.contains(where: { $0.id == remote.id }) else {
-                        return
-                    }
-
-                    if self.status(for: remote.id).state == .connected {
-                        self.desiredConnections.insert(remote.id)
-                        self.reconnectAttempts[remote.id] = 0
-                        self.reconnectInFlight.remove(remote.id)
-                        return
-                    }
-
-                    await self.connect(
-                        remoteID: remote.id,
-                        trigger: .startup,
-                        suppressUserAlerts: true
-                    )
-                }
+        while true {
+            startupAutoConnectRerunRequested = false
+            let pendingIDs = pendingStartupAutoConnectIDs
+            guard !pendingIDs.isEmpty else {
+                return
             }
-            await group.waitForAll()
-        }
 
-        pendingStartupAutoConnectIDs.subtract(launchTargets.map(\.id))
+            let launchTargets = remotes.filter { pendingIDs.contains($0.id) }
+            guard !launchTargets.isEmpty else {
+                pendingStartupAutoConnectIDs.removeAll()
+                return
+            }
+
+            if trigger != "startup" {
+                diagnostics.append(
+                    level: .info,
+                    category: "startup",
+                    message: "Running deferred startup auto-connect for \(launchTargets.count) remote(s) after \(trigger)."
+                )
+            }
+
+            let connectTargets = launchTargets.filter { status(for: $0.id).state != .connected }
+            await primeStartupPasswordCache(for: connectTargets)
+
+            await withTaskGroup(of: Void.self) { group in
+                for remote in launchTargets {
+                    group.addTask { @MainActor [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        guard self.remotes.contains(where: { $0.id == remote.id }) else {
+                            return
+                        }
+
+                        if self.status(for: remote.id).state == .connected {
+                            self.desiredConnections.insert(remote.id)
+                            self.reconnectAttempts[remote.id] = 0
+                            self.reconnectInFlight.remove(remote.id)
+                            return
+                        }
+
+                        await self.connect(
+                            remoteID: remote.id,
+                            trigger: .startup,
+                            suppressUserAlerts: true
+                        )
+                    }
+                }
+                await group.waitForAll()
+            }
+
+            pendingStartupAutoConnectIDs.subtract(launchTargets.map(\.id))
+
+            guard startupAutoConnectRerunRequested else {
+                return
+            }
+        }
     }
 
     /// Beginner note: Startup keychain access is primed sequentially to avoid concurrent auth prompts.
@@ -846,13 +871,14 @@ final class RemotesViewModel: ObservableObject {
         var hasAttemptedInteractiveUnlock = false
         for remote in passwordRemotes {
             // Allow one interactive read to unlock keychain, then continue non-interactively.
-            let allowInteraction = !hasAttemptedInteractiveUnlock
+            let allowInteraction = !hasAttemptedInteractiveUnlock && !startupInteractiveUnlockAttempted
             _ = await resolvedPasswordForRemote(
                 remote.id,
                 allowUserInteraction: allowInteraction
             )
             if allowInteraction {
                 hasAttemptedInteractiveUnlock = true
+                startupInteractiveUnlockAttempted = true
             }
         }
     }
