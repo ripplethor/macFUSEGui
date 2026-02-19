@@ -191,6 +191,8 @@ final class RemotesViewModel: ObservableObject {
     private let diagnostics: DiagnosticsService
     private let launchAtLoginService: LaunchAtLoginService
     private let networkMonitorQueue: DispatchQueue
+    // Product policy: do not trigger system Keychain auth popups during normal app flows.
+    private let allowInteractiveKeychainReads = false
 
     // Core intent set: if a remote ID is here, user wants it kept connected.
     // Recovery logic only auto-reconnects remotes in this set.
@@ -1167,26 +1169,19 @@ final class RemotesViewModel: ObservableObject {
 
         var password: String?
         if remote.authMode == .password {
-            let allowKeychainPrompt = trigger == .manual
             // Existing remotes reuse Keychain password; draft editor handles initial save.
             password = await resolvedPasswordForRemote(
                 remote.id,
-                allowUserInteraction: allowKeychainPrompt
+                allowUserInteraction: allowInteractiveKeychainReads
             )
             if password?.isEmpty != false {
                 guard isOperationCurrent(remoteID: remoteID, operationID: operationID) else {
                     return
                 }
-                let errorMessage: String
-                if allowKeychainPrompt {
-                    errorMessage = "Password is missing. Edit remote and save password."
-                } else {
-                    errorMessage = "Keychain access needs approval. Click Connect once to allow access."
-                }
                 let status = RemoteStatus(
                     state: .error,
                     mountedPath: nil,
-                    lastError: errorMessage,
+                    lastError: "Password is missing or unavailable. Edit remote and save password again.",
                     updatedAt: Date()
                 )
                 observeStatus(status, for: remote.id)
@@ -2456,7 +2451,10 @@ final class RemotesViewModel: ObservableObject {
                     cachePassword(draft.password, for: remoteID)
                 }
             } else if let remoteID = draft.id {
-                password = await resolvedPasswordForRemote(remoteID)
+                password = await resolvedPasswordForRemote(
+                    remoteID,
+                    allowUserInteraction: allowInteractiveKeychainReads
+                )
             }
 
             if password?.isEmpty != false {
@@ -2805,7 +2803,10 @@ final class RemotesViewModel: ObservableObject {
         }
 
         if let id = draft.id {
-            if let stored = await resolvedPasswordForRemote(id) {
+            if let stored = await resolvedPasswordForRemote(
+                id,
+                allowUserInteraction: allowInteractiveKeychainReads
+            ) {
                 return stored
             }
         }
@@ -2823,7 +2824,7 @@ final class RemotesViewModel: ObservableObject {
     private func resolvedPasswordForRemote(
         _ remoteID: UUID,
         preferredDraftPassword: String? = nil,
-        allowUserInteraction: Bool = true
+        allowUserInteraction: Bool = false
     ) async -> String? {
         if let preferredDraftPassword {
             let trimmed = preferredDraftPassword.trimmingCharacters(in: .whitespacesAndNewlines)

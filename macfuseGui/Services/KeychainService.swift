@@ -28,9 +28,9 @@ protocol KeychainServiceProtocol {
 }
 
 extension KeychainServiceProtocol {
-    /// Beginner note: Default read keeps existing call sites interactive.
+    /// Beginner note: Default read is non-interactive to prevent runtime auth popups.
     func readPassword(remoteID: String) throws -> String? {
-        try readPassword(remoteID: remoteID, allowUserInteraction: true)
+        try readPassword(remoteID: remoteID, allowUserInteraction: false)
     }
 }
 
@@ -62,16 +62,16 @@ final class KeychainService: KeychainServiceProtocol {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
 
-        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        let status = SecItemCopyMatching(nonInteractive(query) as CFDictionary, nil)
         if status == errSecSuccess {
-            let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            let updateStatus = SecItemUpdate(nonInteractive(query) as CFDictionary, attributes as CFDictionary)
             guard updateStatus == errSecSuccess else {
                 throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
             }
         } else if status == errSecItemNotFound {
             var insert = query
             insert.merge(attributes) { current, _ in current }
-            let insertStatus = SecItemAdd(insert as CFDictionary, nil)
+            let insertStatus = SecItemAdd(nonInteractive(insert) as CFDictionary, nil)
             guard insertStatus == errSecSuccess else {
                 throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
             }
@@ -83,7 +83,7 @@ final class KeychainService: KeychainServiceProtocol {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func readPassword(remoteID: String) throws -> String? {
-        try readPassword(remoteID: remoteID, allowUserInteraction: true)
+        try readPassword(remoteID: remoteID, allowUserInteraction: false)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -97,9 +97,7 @@ final class KeychainService: KeychainServiceProtocol {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         if !allowUserInteraction {
-            let context = LAContext()
-            context.interactionNotAllowed = true
-            query[kSecUseAuthenticationContext as String] = context
+            query = nonInteractive(query)
         }
 
         var result: CFTypeRef?
@@ -132,9 +130,17 @@ final class KeychainService: KeychainServiceProtocol {
             kSecAttrAccount as String: remoteID
         ]
 
-        let status = SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(nonInteractive(query) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw AppError.keychainError("Failed to delete keychain item (\(status))")
         }
+    }
+
+    private func nonInteractive(_ query: [String: Any]) -> [String: Any] {
+        var query = query
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
+        return query
     }
 }
