@@ -191,6 +191,7 @@ final class RemotesViewModel: ObservableObject {
     private let diagnostics: DiagnosticsService
     private let launchAtLoginService: LaunchAtLoginService
     private let networkMonitorQueue: DispatchQueue
+    private let keychainReadQueue = DispatchQueue(label: "com.visualweb.macfusegui.keychain-read")
     // Product policy: do not trigger system Keychain auth popups during normal app flows.
     private let allowInteractiveKeychainReads = false
 
@@ -801,31 +802,24 @@ final class RemotesViewModel: ObservableObject {
             )
         }
 
-        await withTaskGroup(of: Void.self) { group in
-            for remote in launchTargets {
-                group.addTask { @MainActor [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    guard self.remotes.contains(where: { $0.id == remote.id }) else {
-                        return
-                    }
-
-                    if self.status(for: remote.id).state == .connected {
-                        self.desiredConnections.insert(remote.id)
-                        self.reconnectAttempts[remote.id] = 0
-                        self.reconnectInFlight.remove(remote.id)
-                        return
-                    }
-
-                    await self.connect(
-                        remoteID: remote.id,
-                        trigger: .startup,
-                        suppressUserAlerts: true
-                    )
-                }
+        // Startup uses sequential connect attempts to avoid concurrent keychain access prompts.
+        for remote in launchTargets {
+            guard remotes.contains(where: { $0.id == remote.id }) else {
+                continue
             }
-            await group.waitForAll()
+
+            if status(for: remote.id).state == .connected {
+                desiredConnections.insert(remote.id)
+                reconnectAttempts[remote.id] = 0
+                reconnectInFlight.remove(remote.id)
+                continue
+            }
+
+            await connect(
+                remoteID: remote.id,
+                trigger: .startup,
+                suppressUserAlerts: true
+            )
         }
 
         pendingStartupAutoConnectIDs.subtract(launchTargets.map(\.id))
@@ -2865,8 +2859,9 @@ final class RemotesViewModel: ObservableObject {
         allowUserInteraction: Bool
     ) async throws -> String? {
         let keychainReader = backgroundKeychainReader
+        let queue = keychainReadQueue
         return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            queue.async {
                 do {
                     let password = try keychainReader.readPassword(
                         remoteID: remoteID.uuidString,
