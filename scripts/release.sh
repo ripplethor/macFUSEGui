@@ -49,7 +49,7 @@ CREATED_DMG_PATHS=()
 CREATED_STAGE_DIRS=()
 CREATED_NOTES_FILE=""
 
-RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path (Terminal installer):\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macFUSEGui/main/scripts/install_release.sh)"\n\nDMG fallback:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
+RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS may block first launch.\n\nRecommended install path (Terminal installer):\n/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macfuseGUI/main/scripts/install_release.sh)"\n\nDMG fallback:\n1) Open the DMG.\n2) Open Terminal.\n3) Run: /bin/bash "/Volumes/macfuseGui/Install macFUSEGui.command"\n4) The installer copies the app to /Applications, clears quarantine, and opens it.\n\nIf Finder blocks the app anyway, use the direct command shown in INSTALL_IN_TERMINAL.txt inside the DMG.'
 
 generate_changelog() {
   local previous_tag="$1"

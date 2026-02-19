@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_SLUG="${REPO_SLUG:-ripplethor/macFUSEGui}"
+REPO_SLUG="${REPO_SLUG:-ripplethor/macfuseGUI}"
 APP_NAME="macFUSEGui.app"
 TARGET_APP="/Applications/$APP_NAME"
 
