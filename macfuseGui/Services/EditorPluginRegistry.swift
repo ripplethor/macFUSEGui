@@ -38,13 +38,6 @@ final class EditorPluginRegistry: ObservableObject {
     private let bundledPluginManifestFileName = "plugin.json"
     private let maxLaunchAttemptsPerPlugin = 10
     private let maxArgumentsPerLaunchAttempt = 20
-    private let allowedEnvCommands: Set<String> = [
-        "code",
-        "code-insiders",
-        "codium",
-        "cursor",
-        "zed"
-    ]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -717,19 +710,14 @@ final class EditorPluginRegistry: ObservableObject {
                 ])
             }
 
-            let normalizedCommand = command.lowercased()
-            guard allowedEnvCommands.contains(normalizedCommand) else {
-                throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] /usr/bin/env command '\(command)' is not allowed."
-                ])
-            }
-
             guard candidate.arguments.last == folderPathPlaceholder else {
                 throw AppError.validationFailed([
                     "\(fileName): launchAttempts[\(index)] /usr/bin/env form must place {folderPath} as the final argument."
                 ])
             }
 
+            // Any bare command token is allowed for custom editor extensibility.
+            // Security is enforced by forbidding shell-like free-form arguments.
             let optionArguments = candidate.arguments.dropFirst().dropLast()
             for option in optionArguments {
                 guard option.range(of: "^-{1,2}[A-Za-z0-9][A-Za-z0-9._-]*(=[A-Za-z0-9._:/-]+)?$", options: .regularExpression) != nil else {

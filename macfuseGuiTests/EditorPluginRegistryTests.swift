@@ -299,6 +299,43 @@ final class EditorPluginRegistryTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    func testEnvExecutableAllowsCustomBareCommandToken() throws {
+        let context = try makeContext()
+        let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
+
+        let customManifest = """
+        {
+          "id": "env-custom",
+          "displayName": "Custom Env Command",
+          "priority": 50,
+          "defaultEnabled": false,
+          "launchAttempts": [
+            {
+              "label": "open custom",
+              "executable": "/usr/bin/env",
+              "arguments": ["subl", "--new-window", "{folderPath}"],
+              "timeoutSeconds": 3
+            }
+          ]
+        }
+        """
+        try customManifest.write(
+            to: pluginsDirectory.appendingPathComponent("env-custom.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let registry = EditorPluginRegistry(
+            fileManager: .default,
+            userDefaults: context.defaults,
+            appSupportDirectoryURL: context.appSupportDirectory
+        )
+
+        XCTAssertNotNil(registry.plugin(id: "env-custom"))
+        XCTAssertFalse(registry.loadIssues.contains(where: { $0.file == "env-custom.json" }))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
     func testDuplicateExternalIDDoesNotOverrideBuiltin() throws {
         let context = try makeContext()
         let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
