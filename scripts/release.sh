@@ -30,6 +30,7 @@ APP_BUNDLE_ARM64_PATH="$REPO_ROOT/build/macfuseGui-arm64.app"
 APP_BUNDLE_X86_64_PATH="$REPO_ROOT/build/macfuseGui-x86_64.app"
 VOLNAME="macfuseGui"
 DMG_APP_BUNDLE_NAME="macFUSEGui.app"
+DMG_APPLICATIONS_LINK_NAME="Applications"
 DMG_ZLIB_LEVEL="${DMG_ZLIB_LEVEL:-9}"
 STRIP_DMG_PAYLOAD="${STRIP_DMG_PAYLOAD:-1}"
 
@@ -474,13 +475,14 @@ main() {
     local i
     for i in "${!resolved_app_bundle_paths[@]}"; do
       echo "[dry-run] Would stage app bundle as \"$DMG_APP_BUNDLE_NAME\" for DMG payload."
+      echo "[dry-run] Would create /Applications symlink in DMG payload."
       if [[ "$STRIP_DMG_PAYLOAD" == "1" && "$CODE_SIGNING_ALLOWED" != "YES" ]]; then
         echo "[dry-run] Would strip staged app executable symbols before DMG create."
       fi
       if [[ "$CODE_SIGNING_ALLOWED" != "YES" ]]; then
         echo "[dry-run] Would ad-hoc sign staged app bundle before DMG create."
       fi
-      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"<staging>/$DMG_APP_BUNDLE_NAME\" -ov -format UDZO -imagekey zlib-level=$DMG_ZLIB_LEVEL \"${DMG_PATHS[$i]}\""
+      echo "[dry-run] Would create DMG: hdiutil create -volname \"$VOLNAME\" -srcfolder \"<staging>\" -ov -format UDZO -imagekey zlib-level=$DMG_ZLIB_LEVEL \"${DMG_PATHS[$i]}\""
     done
     echo "[dry-run] Would write VERSION=$new_version and commit: Release ${tag}"
     echo "[dry-run] Would create tag: $tag"
@@ -517,11 +519,12 @@ main() {
       echo "Using app bundle: $current_app_path"
       echo "Staging app bundle for DMG payload: $staged_app_path"
       ditto "$current_app_path" "$staged_app_path"
+      ln -s /Applications "$stage_dir/$DMG_APPLICATIONS_LINK_NAME"
       strip_staged_app_if_enabled "$staged_app_path"
       ad_hoc_sign_staged_app_if_needed "$staged_app_path"
       CREATED_STAGE_DIRS+=("$stage_dir")
       rm -f "$current_dmg_path"
-      hdiutil create -volname "$VOLNAME" -srcfolder "$staged_app_path" -ov -format UDZO -imagekey "zlib-level=$DMG_ZLIB_LEVEL" "$current_dmg_path"
+      hdiutil create -volname "$VOLNAME" -srcfolder "$stage_dir" -ov -format UDZO -imagekey "zlib-level=$DMG_ZLIB_LEVEL" "$current_dmg_path"
       if ! hdiutil verify "$current_dmg_path" >/dev/null 2>&1; then
         die "DMG verification failed: $current_dmg_path"
       fi
