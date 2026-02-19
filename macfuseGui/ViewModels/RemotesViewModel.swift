@@ -222,6 +222,7 @@ final class RemotesViewModel: ObservableObject {
     private var startupAutoConnectInProgress = false
     private var startupAutoConnectRerunRequested = false
     private var startupInteractiveUnlockAttempted = false
+    private var interactiveKeychainReadConsumed = false
     private var networkRestoreDebounceTask: Task<Void, Never>?
     private var recoveryMonitoringStarted = false
     private var shutdownInProgress = false
@@ -2891,10 +2892,23 @@ final class RemotesViewModel: ObservableObject {
             return cached
         }
 
+        let effectiveAllowUserInteraction: Bool
+        if allowUserInteraction, !interactiveKeychainReadConsumed {
+            interactiveKeychainReadConsumed = true
+            effectiveAllowUserInteraction = true
+            diagnostics.append(
+                level: .debug,
+                category: "startup",
+                message: "Allowing one interactive keychain read for remoteID=\(remoteID.uuidString)."
+            )
+        } else {
+            effectiveAllowUserInteraction = false
+        }
+
         do {
             let stored = try await readPasswordFromKeychainOffMain(
                 remoteID: remoteID,
-                allowUserInteraction: allowUserInteraction
+                allowUserInteraction: effectiveAllowUserInteraction
             )
             if let stored, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 passwordCache[remoteID] = stored
