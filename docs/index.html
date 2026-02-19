@@ -608,8 +608,43 @@
                     <div class="text-center mb-16 reveal-on-scroll">
                         <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Install</h2>
                         <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                            Prerequisites, download selection, and first launch steps to mount SSHFS on macOS.
+                            Install with Homebrew, one-line Terminal installer, or manual DMG. Then mount SSHFS on
+                            macOS.
                         </p>
+                    </div>
+                    <div class="reveal-on-scroll mb-12">
+                        <h3 class="text-2xl font-bold mb-6 text-gray-900 dark:text-white text-center">Install methods</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="glass-panel p-6 rounded-2xl shadow-sm">
+                                <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-3">Homebrew Cask</h4>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+                                    Use the tap + cask for a repeatable install flow.
+                                </p>
+                                <div class="rounded-xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-hidden">
+                                    <pre class="p-4 text-xs leading-relaxed overflow-x-auto"><code class="font-mono">brew tap ripplethor/macfusegui https://github.com/ripplethor/macfuseGUI
+brew install --cask ripplethor/macfusegui/macfusegui</code></pre>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-6 rounded-2xl shadow-sm">
+                                <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-3">Terminal Installer</h4>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+                                    Fetch the latest release installer and run it.
+                                </p>
+                                <div class="rounded-xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-hidden">
+                                    <pre class="p-4 text-xs leading-relaxed overflow-x-auto"><code class="font-mono">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/ripplethor/macfuseGUI/main/scripts/install_release.sh)"</code></pre>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-6 rounded-2xl shadow-sm">
+                                <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-3">Manual DMG</h4>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+                                    Download the DMG for your CPU architecture and drag the app to Applications.
+                                </p>
+                                <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                                    class="inline-flex items-center justify-center w-full px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors">
+                                    Open Latest Release
+                                </a>
+                            </div>
+                        </div>
                     </div>
 	                <div
 	                    class="reveal-on-scroll glass-panel p-1 rounded-2xl mb-12 bg-gradient-to-r from-amber-200/50 to-orange-200/50 dark:from-yellow-900/40 dark:to-orange-900/40 border-0">
@@ -691,10 +726,10 @@ brew install gromgit/fuse/sshfs-mac</code></pre>
                             <span
                                 class="sm:hidden inline-block px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold text-sm mb-2">Step
                                 1</span>
-	                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Download & Install</h4>
-	                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">Download the DMG file
-	                                for your Mac architecture (Apple Silicon arm64 or Intel x86_64), then drag the app to
-	                                your Applications folder.</p>
+	                            <h4 class="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Pick an install method</h4>
+	                            <p class="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">Install with Homebrew,
+                                    the one-line Terminal installer, or by downloading the DMG for your Mac architecture
+                                    and dragging the app to Applications.</p>
 	                        </div>
 	                    </div>
                     <div class="reveal-on-scroll delay-100 flex items-start group">
