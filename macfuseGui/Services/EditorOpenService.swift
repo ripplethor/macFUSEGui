@@ -61,6 +61,18 @@ final class EditorOpenService {
     private let pluginRegistry: EditorPluginRegistry
     private let runner: ProcessRunning
     private let folderPathPlaceholder = "{folderPath}"
+    private let additionalEditorPATHEntries = [
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin",
+        "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin",
+        "/Applications/VSCodium.app/Contents/Resources/app/bin",
+        "/Applications/Cursor.app/Contents/Resources/app/bin"
+    ]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(pluginRegistry: EditorPluginRegistry, runner: ProcessRunning) {
@@ -94,7 +106,7 @@ final class EditorOpenService {
                     $0.replacingOccurrences(of: folderPathPlaceholder, with: folderURL.path)
                 }
 
-                let result = await runProcess(
+                var result = await runProcess(
                     executable: attempt.executable,
                     arguments: resolvedArguments,
                     timeout: attempt.timeoutSeconds
@@ -111,6 +123,51 @@ final class EditorOpenService {
                 )
 
                 attempts.append(launchAttemptResult)
+
+                if shouldRetryLegacyVSCodeOpen(
+                    attempt: attempt,
+                    result: launchAttemptResult,
+                    folderPath: folderURL.path
+                ),
+                let fallbackArguments = upgradedVSCodeOpenArguments(
+                    from: resolvedArguments,
+                    folderPath: folderURL.path
+                ) {
+                    result = await runProcess(
+                        executable: attempt.executable,
+                        arguments: fallbackArguments,
+                        timeout: max(attempt.timeoutSeconds, 8)
+                    )
+
+                    let fallbackLaunchAttemptResult = EditorLaunchAttemptResult(
+                        label: "\(attempt.label) (legacy fallback --args --reuse-window)",
+                        executable: attempt.executable,
+                        arguments: fallbackArguments,
+                        timeoutSeconds: max(attempt.timeoutSeconds, 8),
+                        exitCode: result.exitCode,
+                        timedOut: result.timedOut,
+                        output: result.output
+                    )
+                    attempts.append(fallbackLaunchAttemptResult)
+
+                    if fallbackLaunchAttemptResult.success {
+                        let pluginResult = EditorPluginOpenResult(
+                            pluginID: plugin.id,
+                            pluginDisplayName: plugin.displayName,
+                            attempts: attempts
+                        )
+                        pluginResults.append(pluginResult)
+
+                        return EditorOpenResult(
+                            success: true,
+                            launchedPluginID: plugin.id,
+                            launchedPluginDisplayName: plugin.displayName,
+                            mode: mode,
+                            pluginResults: pluginResults,
+                            message: "Opened \(remoteName) in \(plugin.displayName)."
+                        )
+                    }
+                }
 
                 if launchAttemptResult.success {
                     let pluginResult = EditorPluginOpenResult(
@@ -191,6 +248,7 @@ final class EditorOpenService {
             let result = try await runner.run(
                 executable: executable,
                 arguments: arguments,
+                environment: processEnvironment(executable: executable),
                 timeout: timeout
             )
             let combined = [result.stdout, result.stderr]
@@ -202,5 +260,61 @@ final class EditorOpenService {
         } catch {
             return (-1, false, error.localizedDescription)
         }
+    }
+
+    private func processEnvironment(executable: String) -> [String: String] {
+        guard executable == "/usr/bin/env" else {
+            return [:]
+        }
+
+        var pathEntries = ProcessInfo.processInfo.environment["PATH"]?
+            .split(separator: ":")
+            .map(String.init) ?? []
+
+        for entry in additionalEditorPATHEntries where !pathEntries.contains(entry) {
+            pathEntries.append(entry)
+        }
+
+        return ["PATH": pathEntries.joined(separator: ":")]
+    }
+
+    private func shouldRetryLegacyVSCodeOpen(
+        attempt: EditorLaunchAttemptDefinition,
+        result: EditorLaunchAttemptResult,
+        folderPath: String
+    ) -> Bool {
+        guard attempt.executable == "/usr/bin/open" else {
+            return false
+        }
+        guard !result.success else {
+            return false
+        }
+        guard !result.arguments.contains("--args") else {
+            return false
+        }
+        guard result.arguments.contains(folderPath) else {
+            return false
+        }
+        let joinedArgs = result.arguments.joined(separator: " ").lowercased()
+        guard joinedArgs.contains("visual studio code") || joinedArgs.contains("com.microsoft.vscode") else {
+            return false
+        }
+
+        let output = result.output.lowercased()
+        return output.contains("error -36") || output.contains("_lsopenurlswithcompletionhandler")
+    }
+
+    private func upgradedVSCodeOpenArguments(from arguments: [String], folderPath: String) -> [String]? {
+        guard !arguments.contains("--args") else {
+            return nil
+        }
+        guard let folderIndex = arguments.firstIndex(of: folderPath) else {
+            return nil
+        }
+
+        var upgraded = arguments
+        upgraded.remove(at: folderIndex)
+        upgraded.append(contentsOf: ["--args", "--reuse-window", folderPath])
+        return upgraded
     }
 }

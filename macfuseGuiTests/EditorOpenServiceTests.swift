@@ -17,7 +17,7 @@ final class EditorOpenServiceTests: XCTestCase {
     func testPreferredModeSucceedsWithDefaultVSCodePlugin() async throws {
         let context = try makeContext()
         let registry = makeRegistry(context: context)
-        let runner = FakeEditorRunner(scriptedResults: [.success])
+        let runner = FakeEditorRunner(scriptedResults: [.success()])
         let service = EditorOpenService(pluginRegistry: registry, runner: runner)
 
         let folderURL = URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true)
@@ -42,7 +42,7 @@ final class EditorOpenServiceTests: XCTestCase {
         registry.setPreferredPlugin("cursor")
 
         // Cursor has 3 attempts; all fail. Then VS Code first attempt succeeds.
-        let runner = FakeEditorRunner(scriptedResults: [.failure, .failure, .failure, .success])
+        let runner = FakeEditorRunner(scriptedResults: [.failure(), .failure(), .failure(), .success()])
         let service = EditorOpenService(pluginRegistry: registry, runner: runner)
 
         let folderURL = URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true)
@@ -68,7 +68,7 @@ final class EditorOpenServiceTests: XCTestCase {
         registry.setPluginActive(true, pluginID: "cursor")
 
         // Cursor has 3 attempts; all fail.
-        let runner = FakeEditorRunner(scriptedResults: [.failure, .failure, .failure])
+        let runner = FakeEditorRunner(scriptedResults: [.failure(), .failure(), .failure()])
         let service = EditorOpenService(pluginRegistry: registry, runner: runner)
 
         let folderURL = URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true)
@@ -87,7 +87,7 @@ final class EditorOpenServiceTests: XCTestCase {
     func testFolderPlaceholderSubstitutionPreservesSpaces() async throws {
         let context = try makeContext()
         let registry = makeRegistry(context: context)
-        let runner = FakeEditorRunner(scriptedResults: [.success])
+        let runner = FakeEditorRunner(scriptedResults: [.success()])
         let service = EditorOpenService(pluginRegistry: registry, runner: runner)
 
         let folderPath = "/tmp/editor-open-tests/Project With Spaces"
@@ -146,6 +146,83 @@ final class EditorOpenServiceTests: XCTestCase {
         XCTAssertTrue(result.pluginResults.isEmpty)
     }
 
+    /// Beginner note: If users did not install the `code` shell command, we still provide app-bin PATH fallbacks.
+    func testEnvLaunchAttemptsReceiveEditorPATHFallbacks() async throws {
+        let context = try makeContext()
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(
+            scriptedResults: [
+                .failure(),
+                .failure(),
+                .failure(),
+                .failure(),
+                .success()
+            ]
+        )
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+
+        _ = await service.open(
+            folderURL: URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true),
+            remoteName: "Remote PATH",
+            mode: .explicit(pluginID: "vscode")
+        )
+
+        let invocations = await runner.invocations()
+        let envInvocation = try XCTUnwrap(invocations.last)
+        XCTAssertEqual(envInvocation.executable, "/usr/bin/env")
+        let path = envInvocation.environment["PATH"] ?? ""
+        XCTAssertTrue(path.contains("/Applications/Visual Studio Code.app/Contents/Resources/app/bin"))
+        XCTAssertTrue(path.contains("/opt/homebrew/bin"))
+    }
+
+    /// Beginner note: Keeps backward compatibility if a user still has an older VS Code plugin manifest form.
+    func testLegacyVSCodeOpenArgumentsRetryWithArgsMode() async throws {
+        let context = try makeContext()
+        let pluginsDirectory = try createPluginsDirectory(appSupportDirectory: context.appSupportDirectory)
+        let legacyManifest = """
+        {
+          "id": "legacyvscode",
+          "displayName": "Legacy VS Code",
+          "priority": 5,
+          "defaultEnabled": true,
+          "launchAttempts": [
+            {
+              "label": "open app Visual Studio Code",
+              "executable": "/usr/bin/open",
+              "arguments": ["-a", "Visual Studio Code", "{folderPath}"],
+              "timeoutSeconds": 3
+            }
+          ]
+        }
+        """
+        try legacyManifest.write(
+            to: pluginsDirectory.appendingPathComponent("legacyvscode.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(
+            scriptedResults: [
+                .failure(stderr: "_LSOpenURLsWithCompletionHandler() failed with error -36"),
+                .success()
+            ]
+        )
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+
+        let folderPath = "/tmp/editor-open-tests/project"
+        _ = await service.open(
+            folderURL: URL(fileURLWithPath: folderPath, isDirectory: true),
+            remoteName: "Remote Legacy",
+            mode: .explicit(pluginID: "legacyvscode")
+        )
+
+        let invocations = await runner.invocations()
+        XCTAssertEqual(invocations.count, 2)
+        XCTAssertEqual(invocations[0].arguments, ["-a", "Visual Studio Code", folderPath])
+        XCTAssertEqual(invocations[1].arguments, ["-a", "Visual Studio Code", "--args", "--reuse-window", folderPath])
+    }
+
     private func makeRegistry(context: (appSupportDirectory: URL, defaults: UserDefaults)) -> EditorPluginRegistry {
         EditorPluginRegistry(
             fileManager: .default,
@@ -187,12 +264,13 @@ private actor FakeEditorRunner: ProcessRunning {
     struct Invocation: Sendable {
         let executable: String
         let arguments: [String]
+        let environment: [String: String]
         let timeout: TimeInterval
     }
 
     enum ScriptedResult: Sendable {
-        case success
-        case failure
+        case success(stdout: String = "", stderr: String = "", exitCode: Int32 = 0, timedOut: Bool = false)
+        case failure(stdout: String = "", stderr: String = "failed", exitCode: Int32 = 1, timedOut: Bool = false)
     }
 
     private var scriptedResults: [ScriptedResult]
@@ -213,32 +291,33 @@ private actor FakeEditorRunner: ProcessRunning {
             Invocation(
                 executable: executable,
                 arguments: arguments,
+                environment: environment,
                 timeout: timeout
             )
         )
 
-        let nextResult: ScriptedResult = scriptedResults.isEmpty ? .failure : scriptedResults.removeFirst()
+        let nextResult: ScriptedResult = scriptedResults.isEmpty ? .failure() : scriptedResults.removeFirst()
 
         switch nextResult {
-        case .success:
+        case .success(let stdout, let stderr, let exitCode, let timedOut):
             return ProcessResult(
                 executable: executable,
                 arguments: arguments,
-                stdout: "",
-                stderr: "",
-                exitCode: 0,
-                timedOut: false,
+                stdout: stdout,
+                stderr: stderr,
+                exitCode: exitCode,
+                timedOut: timedOut,
                 duration: 0.01
             )
 
-        case .failure:
+        case .failure(let stdout, let stderr, let exitCode, let timedOut):
             return ProcessResult(
                 executable: executable,
                 arguments: arguments,
-                stdout: "",
-                stderr: "failed",
-                exitCode: 1,
-                timedOut: false,
+                stdout: stdout,
+                stderr: stderr,
+                exitCode: exitCode,
+                timedOut: timedOut,
                 duration: 0.01
             )
         }
