@@ -45,20 +45,36 @@ RELEASE_NOTES=$'Unsigned macOS build (NOT code signed / NOT notarized)\n\nmacOS 
 
 generate_changelog() {
   local previous_tag="$1"
-  local range_args=()
+  local range_ref=""
 
   if [[ -n "$previous_tag" ]]; then
-    range_args=("${previous_tag}..HEAD")
+    range_ref="${previous_tag}..HEAD"
   else
-    range_args=("HEAD")
+    range_ref="HEAD"
   fi
 
-  # Generate a deterministic list from commit subjects.
+  # Generate deterministic changelog entries from commit subjects.
   # Exclude:
-  # - auto release commit line
-  # - docs commits (docs: / docs(scope):), so release notes stay focused on runtime changes
-  git log --no-merges --pretty=format:'- %s (%h)' "${range_args[@]}" \
-    | sed -E '/^- Release v[0-9]+\.[0-9]+\.[0-9]+ \([0-9a-f]+\)$/d; /^- [Dd]ocs(\([^)]*\))?: /d'
+  # - auto release commits
+  # - docs:* style commits
+  # - any commit that touches docs/, *.html, scripts/*.sh, or test files
+  git log --no-merges --pretty=format:'%H%x1f%s' "$range_ref" | while IFS=$'\x1f' read -r commit_hash subject; do
+    [[ -n "$commit_hash" ]] || continue
+
+    if printf '%s\n' "$subject" | grep -Eq '^Release[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+$'; then
+      continue
+    fi
+
+    if printf '%s\n' "$subject" | grep -Eq '^[Dd]ocs(\([^)]*\))?:[[:space:]]'; then
+      continue
+    fi
+
+    if git diff-tree --no-commit-id --name-only -r "$commit_hash" | grep -Eq '^(docs/|.*\.html$|scripts/.*\.sh$|macfuseGuiTests/|macfuseguitest/)'; then
+      continue
+    fi
+
+    printf -- '- %s (%s)\n' "$subject" "${commit_hash:0:7}"
+  done
 }
 
 write_release_notes_file() {
