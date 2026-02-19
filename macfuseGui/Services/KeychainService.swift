@@ -39,6 +39,8 @@ extension KeychainServiceProtocol {
 final class KeychainService: KeychainServiceProtocol {
     static let currentService = "com.visualweb.macfusegui.password.v2"
     static let legacyService = "com.visualweb.macfusegui.password"
+    // Prevent background connect flows from touching legacy items that may trigger macOS auth UI.
+    private let allowLegacyFallbackForNonInteractiveReads = false
 
     private let service: String
     private let legacyServices: [String]
@@ -84,6 +86,10 @@ final class KeychainService: KeychainServiceProtocol {
             allowUserInteraction: allowUserInteraction
         ) {
             return currentPassword
+        }
+
+        if !allowUserInteraction && !allowLegacyFallbackForNonInteractiveReads {
+            return nil
         }
 
         for legacyService in legacyServices {
