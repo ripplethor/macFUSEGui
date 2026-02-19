@@ -60,31 +60,12 @@ struct EditorOpenResult: Sendable {
 final class EditorOpenService {
     private let pluginRegistry: EditorPluginRegistry
     private let runner: ProcessRunning
-    private let fileManager: FileManager
     private let folderPathPlaceholder = "{folderPath}"
-    private let additionalEditorPATHEntries = [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin",
-        "/usr/sbin",
-        "/sbin",
-        "/Applications/Visual Studio Code.app/Contents/Resources/app/bin",
-        "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin",
-        "/Applications/VSCodium.app/Contents/Resources/app/bin",
-        "/Applications/Cursor.app/Contents/Resources/app/bin"
-    ]
-    private var cachedDiscoveredEditorPATHEntries: [String]?
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(
-        pluginRegistry: EditorPluginRegistry,
-        runner: ProcessRunning,
-        fileManager: FileManager = .default
-    ) {
+    init(pluginRegistry: EditorPluginRegistry, runner: ProcessRunning) {
         self.pluginRegistry = pluginRegistry
         self.runner = runner
-        self.fileManager = fileManager
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -113,7 +94,7 @@ final class EditorOpenService {
                     $0.replacingOccurrences(of: folderPathPlaceholder, with: folderURL.path)
                 }
 
-                var result = await runProcess(
+                let result = await runProcess(
                     executable: attempt.executable,
                     arguments: resolvedArguments,
                     timeout: attempt.timeoutSeconds
@@ -130,51 +111,6 @@ final class EditorOpenService {
                 )
 
                 attempts.append(launchAttemptResult)
-
-                if shouldRetryOpenWithArgsFallback(
-                    attempt: attempt,
-                    result: launchAttemptResult,
-                    folderPath: folderURL.path
-                ),
-                let fallbackArguments = upgradedOpenArguments(
-                    from: resolvedArguments,
-                    folderPath: folderURL.path
-                ) {
-                    result = await runProcess(
-                        executable: attempt.executable,
-                        arguments: fallbackArguments,
-                        timeout: max(attempt.timeoutSeconds, 8)
-                    )
-
-                    let fallbackLaunchAttemptResult = EditorLaunchAttemptResult(
-                        label: "\(attempt.label) (compat fallback --args)",
-                        executable: attempt.executable,
-                        arguments: fallbackArguments,
-                        timeoutSeconds: max(attempt.timeoutSeconds, 8),
-                        exitCode: result.exitCode,
-                        timedOut: result.timedOut,
-                        output: result.output
-                    )
-                    attempts.append(fallbackLaunchAttemptResult)
-
-                    if fallbackLaunchAttemptResult.success {
-                        let pluginResult = EditorPluginOpenResult(
-                            pluginID: plugin.id,
-                            pluginDisplayName: plugin.displayName,
-                            attempts: attempts
-                        )
-                        pluginResults.append(pluginResult)
-
-                        return EditorOpenResult(
-                            success: true,
-                            launchedPluginID: plugin.id,
-                            launchedPluginDisplayName: plugin.displayName,
-                            mode: mode,
-                            pluginResults: pluginResults,
-                            message: "Opened \(remoteName) in \(plugin.displayName)."
-                        )
-                    }
-                }
 
                 if launchAttemptResult.success {
                     let pluginResult = EditorPluginOpenResult(
@@ -255,7 +191,6 @@ final class EditorOpenService {
             let result = try await runner.run(
                 executable: executable,
                 arguments: arguments,
-                environment: processEnvironment(executable: executable),
                 timeout: timeout
             )
             let combined = [result.stdout, result.stderr]
@@ -267,110 +202,5 @@ final class EditorOpenService {
         } catch {
             return (-1, false, error.localizedDescription)
         }
-    }
-
-    private func processEnvironment(executable: String) -> [String: String] {
-        guard executable == "/usr/bin/env" else {
-            return [:]
-        }
-
-        var pathEntries = ProcessInfo.processInfo.environment["PATH"]?
-            .split(separator: ":")
-            .map(String.init) ?? []
-
-        let discovered = discoveredEditorPATHEntries()
-        for entry in additionalEditorPATHEntries where !pathEntries.contains(entry) {
-            pathEntries.append(entry)
-        }
-        for entry in discovered where !pathEntries.contains(entry) {
-            pathEntries.append(entry)
-        }
-
-        return ["PATH": pathEntries.joined(separator: ":")]
-    }
-
-    private func shouldRetryOpenWithArgsFallback(
-        attempt: EditorLaunchAttemptDefinition,
-        result: EditorLaunchAttemptResult,
-        folderPath: String
-    ) -> Bool {
-        guard attempt.executable == "/usr/bin/open" else {
-            return false
-        }
-        guard !result.success else {
-            return false
-        }
-        guard !result.arguments.contains("--args") else {
-            return false
-        }
-        guard result.arguments.contains(folderPath) else {
-            return false
-        }
-        return true
-    }
-
-    private func upgradedOpenArguments(from arguments: [String], folderPath: String) -> [String]? {
-        guard !arguments.contains("--args") else {
-            return nil
-        }
-        guard let folderIndex = arguments.firstIndex(of: folderPath) else {
-            return nil
-        }
-
-        var upgraded = arguments
-        upgraded.remove(at: folderIndex)
-        upgraded.append("--args")
-        if shouldAddReuseWindowArgument(for: arguments) {
-            upgraded.append("--reuse-window")
-        }
-        upgraded.append(folderPath)
-        return upgraded
-    }
-
-    private func shouldAddReuseWindowArgument(for arguments: [String]) -> Bool {
-        let joined = arguments.joined(separator: " ").lowercased()
-        return joined.contains("visual studio code")
-            || joined.contains("com.microsoft.vscode")
-            || joined.contains("com.microsoft.vscodeinsiders")
-    }
-
-    private func discoveredEditorPATHEntries() -> [String] {
-        if let cachedDiscoveredEditorPATHEntries {
-            return cachedDiscoveredEditorPATHEntries
-        }
-
-        var discovered: [String] = []
-        var seen: Set<String> = []
-        let roots = [
-            URL(fileURLWithPath: "/Applications", isDirectory: true),
-            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true)
-        ]
-
-        for root in roots where fileManager.fileExists(atPath: root.path) {
-            guard let appURLs = try? fileManager.contentsOfDirectory(
-                at: root,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            ) else {
-                continue
-            }
-
-            for appURL in appURLs where appURL.pathExtension.lowercased() == "app" {
-                let candidateDirectories = [
-                    appURL.appendingPathComponent("Contents/Resources/app/bin", isDirectory: true),
-                    appURL.appendingPathComponent("Contents/Resources/bin", isDirectory: true),
-                    appURL.appendingPathComponent("Contents/MacOS", isDirectory: true)
-                ]
-
-                for candidate in candidateDirectories where fileManager.fileExists(atPath: candidate.path) {
-                    if seen.insert(candidate.path).inserted {
-                        discovered.append(candidate.path)
-                    }
-                }
-            }
-        }
-
-        cachedDiscoveredEditorPATHEntries = discovered
-        return discovered
     }
 }

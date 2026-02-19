@@ -25,7 +25,6 @@ final class EditorPluginRegistry: ObservableObject {
         return encoder
     }()
     private var catalog: [EditorPluginDefinition] = []
-    private var externalManifestFilesByID: [String: String] = [:]
 
     private let activationOverridesKey = "editor.plugins.activation_overrides"
     private let preferredPluginIDKey = "editor.plugins.preferred_id"
@@ -36,8 +35,6 @@ final class EditorPluginRegistry: ObservableObject {
     private let exampleTemplateFileName = "custom-editor.json.template"
     private let bundledBuiltInPluginsFolderName = "EditorPlugins"
     private let bundledPluginManifestFileName = "plugin.json"
-    private let maxLaunchAttemptsPerPlugin = 10
-    private let maxArgumentsPerLaunchAttempt = 20
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -51,10 +48,7 @@ final class EditorPluginRegistry: ObservableObject {
         if let appSupportDirectoryURL {
             self.appSupportDirectoryURL = appSupportDirectoryURL
         } else {
-            // Defensive fallback: FileManager should return a user Application Support URL, but if it doesn't
-            // (rare OS/environment edge case), we avoid crashing and fall back to the conventional path.
-            self.appSupportDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+            self.appSupportDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         }
 
         reloadCatalog()
@@ -65,15 +59,11 @@ final class EditorPluginRegistry: ObservableObject {
         var issues: [EditorPluginLoadIssue] = []
         let builtIns = builtInCatalog(issues: &issues)
         preparePluginsDirectoryScaffold(builtIns: builtIns, issues: &issues)
-        let loadedExternal = loadExternalPlugins(issues: &issues)
-        // Cache manifest filename by plugin ID so later lookups do not re-scan and decode every JSON file.
-        // Call reloadCatalog() to refresh this map after external plugin files change.
-        externalManifestFilesByID = Dictionary(uniqueKeysWithValues: loadedExternal.map { ($0.plugin.id, $0.file) })
         var mergedByID: [String: EditorPluginDefinition] = Dictionary(
             uniqueKeysWithValues: builtIns.map { ($0.id, $0) }
         )
 
-        for loaded in loadedExternal {
+        for loaded in loadExternalPlugins(issues: &issues) {
             if mergedByID[loaded.plugin.id] != nil {
                 issues.append(
                     EditorPluginLoadIssue(
@@ -342,11 +332,36 @@ final class EditorPluginRegistry: ObservableObject {
     }
 
     private func externalManifestURL(for pluginID: String) -> URL? {
-        let normalized = pluginID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let manifestFile = externalManifestFilesByID[normalized] else {
+        guard fileManager.fileExists(atPath: pluginsDirectoryURL.path) else {
             return nil
         }
-        return pluginsDirectoryURL.appendingPathComponent(manifestFile, isDirectory: false)
+
+        let candidateFiles: [URL]
+        do {
+            candidateFiles = try fileManager
+                .contentsOfDirectory(
+                    at: pluginsDirectoryURL,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles]
+                )
+                .filter { $0.pathExtension.lowercased() == "json" }
+        } catch {
+            return nil
+        }
+
+        for fileURL in candidateFiles {
+            guard let data = try? Data(contentsOf: fileURL),
+                  let manifest = try? decoder.decode(ExternalPluginManifest.self, from: data) else {
+                continue
+            }
+
+            let manifestID = manifest.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if manifestID == pluginID {
+                return fileURL
+            }
+        }
+
+        return nil
     }
 
     private func preparePluginsDirectoryScaffold(
@@ -584,8 +599,6 @@ final class EditorPluginRegistry: ObservableObject {
                 seenIDs.insert(validated.id)
                 plugins.append((fileURL.lastPathComponent, validated))
             } catch {
-                // By design: do not throw for one bad external manifest. We keep built-ins and other manifests usable
-                // and surface failures through loadIssues so users can see why a plugin was ignored.
                 issues.append(
                     EditorPluginLoadIssue(
                         file: fileURL.lastPathComponent,
@@ -618,11 +631,6 @@ final class EditorPluginRegistry: ObservableObject {
 
         guard !manifest.launchAttempts.isEmpty else {
             throw AppError.validationFailed(["\(fileName): At least one launch attempt is required."])
-        }
-        guard manifest.launchAttempts.count <= maxLaunchAttemptsPerPlugin else {
-            throw AppError.validationFailed([
-                "\(fileName): launchAttempts has \(manifest.launchAttempts.count) entries; maximum is \(maxLaunchAttemptsPerPlugin)."
-            ])
         }
 
         let priority = max(0, manifest.priority)
@@ -663,21 +671,10 @@ final class EditorPluginRegistry: ObservableObject {
         guard !candidate.arguments.isEmpty else {
             throw AppError.validationFailed(["\(fileName): launchAttempts[\(index)] arguments cannot be empty."])
         }
-        guard candidate.arguments.count <= maxArgumentsPerLaunchAttempt else {
-            throw AppError.validationFailed([
-                "\(fileName): launchAttempts[\(index)] has \(candidate.arguments.count) arguments; maximum is \(maxArgumentsPerLaunchAttempt)."
-            ])
-        }
 
-        let placeholderCount = placeholderOccurrences(in: candidate.arguments)
-        guard placeholderCount > 0 else {
+        guard candidate.arguments.contains(where: { $0.contains(folderPathPlaceholder) }) else {
             throw AppError.validationFailed([
                 "\(fileName): launchAttempts[\(index)] must include {folderPath} placeholder."
-            ])
-        }
-        guard placeholderCount == 1 else {
-            throw AppError.validationFailed([
-                "\(fileName): launchAttempts[\(index)] must include {folderPath} exactly once."
             ])
         }
 
@@ -709,23 +706,6 @@ final class EditorPluginRegistry: ObservableObject {
                     "\(fileName): launchAttempts[\(index)] /usr/bin/env form must start with a bare command token."
                 ])
             }
-
-            guard candidate.arguments.last == folderPathPlaceholder else {
-                throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form must place {folderPath} as the final argument."
-                ])
-            }
-
-            // Any bare command token is allowed for custom editor extensibility.
-            // Security is enforced by forbidding shell-like free-form arguments.
-            let optionArguments = candidate.arguments.dropFirst().dropLast()
-            for option in optionArguments {
-                guard option.range(of: "^-{1,2}[A-Za-z0-9][A-Za-z0-9._-]*(=[A-Za-z0-9._:/-]+)?$", options: .regularExpression) != nil else {
-                    throw AppError.validationFailed([
-                        "\(fileName): launchAttempts[\(index)] /usr/bin/env option '\(option)' is not allowed."
-                    ])
-                }
-            }
         }
 
         let timeout = clampedTimeout(candidate.timeoutSeconds)
@@ -741,13 +721,6 @@ final class EditorPluginRegistry: ObservableObject {
     private func clampedTimeout(_ timeout: TimeInterval?) -> TimeInterval {
         let raw = timeout ?? 3
         return min(10, max(1, raw))
-    }
-
-    private func placeholderOccurrences(in arguments: [String]) -> Int {
-        arguments.reduce(0) { count, argument in
-            let segments = argument.components(separatedBy: folderPathPlaceholder)
-            return count + max(0, segments.count - 1)
-        }
     }
 
     private func builtInCatalog(issues: inout [EditorPluginLoadIssue]) -> [EditorPluginDefinition] {
@@ -841,28 +814,28 @@ final class EditorPluginRegistry: ObservableObject {
                 defaultEnabled: true,
                 launchAttempts: [
                     EditorLaunchAttemptDefinition(
-                        label: "open bundle com.microsoft.VSCode --args --reuse-window",
+                        label: "open bundle com.microsoft.VSCode",
                         executable: "/usr/bin/open",
-                        arguments: ["-b", "com.microsoft.VSCode", "--args", "--reuse-window", folderPathPlaceholder],
-                        timeoutSeconds: 8
+                        arguments: ["-b", "com.microsoft.VSCode", folderPathPlaceholder],
+                        timeoutSeconds: 3
                     ),
                     EditorLaunchAttemptDefinition(
-                        label: "open bundle com.microsoft.VSCodeInsiders --args --reuse-window",
+                        label: "open bundle com.microsoft.VSCodeInsiders",
                         executable: "/usr/bin/open",
-                        arguments: ["-b", "com.microsoft.VSCodeInsiders", "--args", "--reuse-window", folderPathPlaceholder],
-                        timeoutSeconds: 8
+                        arguments: ["-b", "com.microsoft.VSCodeInsiders", folderPathPlaceholder],
+                        timeoutSeconds: 3
                     ),
                     EditorLaunchAttemptDefinition(
-                        label: "open app Visual Studio Code --args --reuse-window",
+                        label: "open app Visual Studio Code",
                         executable: "/usr/bin/open",
-                        arguments: ["-a", "Visual Studio Code", "--args", "--reuse-window", folderPathPlaceholder],
-                        timeoutSeconds: 8
+                        arguments: ["-a", "Visual Studio Code", folderPathPlaceholder],
+                        timeoutSeconds: 3
                     ),
                     EditorLaunchAttemptDefinition(
-                        label: "open app Visual Studio Code - Insiders --args --reuse-window",
+                        label: "open app Visual Studio Code - Insiders",
                         executable: "/usr/bin/open",
-                        arguments: ["-a", "Visual Studio Code - Insiders", "--args", "--reuse-window", folderPathPlaceholder],
-                        timeoutSeconds: 8
+                        arguments: ["-a", "Visual Studio Code - Insiders", folderPathPlaceholder],
+                        timeoutSeconds: 3
                     ),
                     EditorLaunchAttemptDefinition(
                         label: "code --reuse-window",
