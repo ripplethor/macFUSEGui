@@ -114,6 +114,20 @@ strip_app_executable_if_enabled() {
   strip -Sx "$executable_path"
 }
 
+ad_hoc_sign_app_if_needed() {
+  local app_bundle="$1"
+
+  if [[ "$CODE_SIGNING_ALLOWED" == "YES" ]]; then
+    return
+  fi
+
+  codesign --force --deep --sign - "$app_bundle"
+  if ! codesign --verify --deep --strict --verbose=2 "$app_bundle" >/dev/null 2>&1; then
+    echo "Ad-hoc signing verification failed: $app_bundle" >&2
+    exit 1
+  fi
+}
+
 run_xcodebuild_for_arch() {
   local arch="$1"
   shift
@@ -195,6 +209,7 @@ build_single_variant() {
   rm -rf "$output_app"
   ditto "$product_app" "$output_app"
   strip_app_executable_if_enabled "$output_app"
+  ad_hoc_sign_app_if_needed "$output_app"
   verify_app_executable_arch "$output_app" "$build_arch"
   echo "Built: $output_app"
 }
