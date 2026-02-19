@@ -69,15 +69,26 @@ else
 fi
 
 echo "Resolving release asset for $ARCH from $REPO_SLUG..."
-release_json="$(curl -fsSL "$RELEASE_API_URL")"
+release_json="$(curl -fsSL \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  -H "User-Agent: macFUSEGui-installer" \
+  "$RELEASE_API_URL")"
+if [[ -z "$release_json" ]]; then
+  echo "GitHub API returned an empty response for: $RELEASE_API_URL" >&2
+  exit 1
+fi
 
 asset_url="$(
-  printf '%s' "$release_json" | python3 - "$ARCH" <<'PY'
+  printf '%s' "$release_json" | python3 -c '
 import json
 import sys
 
 arch = sys.argv[1]
-data = json.load(sys.stdin)
+raw = sys.stdin.read()
+if not raw.strip():
+    sys.exit(2)
+data = json.loads(raw)
 suffix = f"-macos-{arch}.dmg"
 for asset in data.get("assets", []):
     name = asset.get("name", "")
@@ -85,11 +96,15 @@ for asset in data.get("assets", []):
         print(asset.get("browser_download_url", ""))
         sys.exit(0)
 sys.exit(1)
-PY
+  ' "$ARCH"
 )" || {
-  echo "Could not find a DMG asset matching arch '$ARCH' in the selected release." >&2
+  echo "Could not resolve DMG asset for arch '$ARCH'. Check release assets and GitHub API availability." >&2
   exit 1
 }
+if [[ -z "$asset_url" ]]; then
+  echo "Release metadata did not include a download URL for arch '$ARCH'." >&2
+  exit 1
+fi
 
 tmp_dir="$(mktemp -d -t macfusegui-install.XXXXXX)"
 mount_point=""
