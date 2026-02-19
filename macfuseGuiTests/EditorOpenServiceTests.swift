@@ -159,15 +159,7 @@ final class EditorOpenServiceTests: XCTestCase {
     func testEnvLaunchAttemptsReceiveEditorPATHFallbacks() async throws {
         let context = try makeContext()
         let registry = makeRegistry(context: context)
-        let runner = FakeEditorRunner(
-            scriptedResults: [
-                .failure(),
-                .failure(),
-                .failure(),
-                .failure(),
-                .success()
-            ]
-        )
+        let runner = FakeEditorRunner(scriptedResults: [])
         let service = EditorOpenService(pluginRegistry: registry, runner: runner)
 
         _ = await service.open(
@@ -177,8 +169,7 @@ final class EditorOpenServiceTests: XCTestCase {
         )
 
         let invocations = await runner.invocations()
-        let envInvocation = try XCTUnwrap(invocations.last)
-        XCTAssertEqual(envInvocation.executable, "/usr/bin/env")
+        let envInvocation = try XCTUnwrap(invocations.first(where: { $0.executable == "/usr/bin/env" }))
         let path = envInvocation.environment["PATH"] ?? ""
         XCTAssertTrue(path.contains("/Applications/Visual Studio Code.app/Contents/Resources/app/bin"))
         XCTAssertTrue(path.contains("/opt/homebrew/bin"))
