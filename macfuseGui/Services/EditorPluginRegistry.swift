@@ -814,6 +814,12 @@ final class EditorPluginRegistry: ObservableObject {
                 defaultEnabled: true,
                 launchAttempts: [
                     EditorLaunchAttemptDefinition(
+                        label: "code --reuse-window",
+                        executable: "/usr/bin/env",
+                        arguments: ["code", "--reuse-window", folderPathPlaceholder],
+                        timeoutSeconds: 3
+                    ),
+                    EditorLaunchAttemptDefinition(
                         label: "open bundle com.microsoft.VSCode",
                         executable: "/usr/bin/open",
                         arguments: ["-b", "com.microsoft.VSCode", folderPathPlaceholder],
@@ -835,12 +841,6 @@ final class EditorPluginRegistry: ObservableObject {
                         label: "open app Visual Studio Code - Insiders",
                         executable: "/usr/bin/open",
                         arguments: ["-a", "Visual Studio Code - Insiders", folderPathPlaceholder],
-                        timeoutSeconds: 3
-                    ),
-                    EditorLaunchAttemptDefinition(
-                        label: "code --reuse-window",
-                        executable: "/usr/bin/env",
-                        arguments: ["code", "--reuse-window", folderPathPlaceholder],
                         timeoutSeconds: 3
                     )
                 ],
