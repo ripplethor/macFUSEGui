@@ -12,7 +12,7 @@ set -euo pipefail
 # - require clean git working tree
 # - optional dry-run mode (--dry-run / -n): print actions only, no release side effects
 # - use origin release tags as source of truth and realign local release tags
-# - resolve base version from max(VERSION, latest origin vX.Y.Z tag)
+# - resolve base version from latest origin vX.Y.Z tag (fallback to VERSION when no tags exist)
 # - bump patch version
 # - build app bundle (Release by default)
 # - create DMG(s) from build output app bundle(s)
@@ -213,20 +213,6 @@ sync_local_release_tags_with_origin() {
   done < <(git tag -l 'v[0-9]*.[0-9]*.[0-9]*')
 }
 
-max_version() {
-  local a="$1"
-  local b="$2"
-  if [[ -z "$a" ]]; then
-    echo "$b"
-    return
-  fi
-  if [[ -z "$b" ]]; then
-    echo "$a"
-    return
-  fi
-  printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n 1
-}
-
 require_clean_tree() {
   local status
   status="$(git status --porcelain --untracked-files=normal)"
@@ -367,9 +353,15 @@ main() {
   fi
 
   local base_version
-  base_version="$(max_version "$version_from_file" "$version_from_tag")"
-  if [[ -z "$base_version" ]]; then
+  if [[ -n "$version_from_tag" ]]; then
+    base_version="$version_from_tag"
+  elif [[ -n "$version_from_file" ]]; then
+    base_version="$version_from_file"
+  else
     base_version="0.1.0"
+  fi
+  if [[ -n "$version_from_tag" && -n "$version_from_file" && "$version_from_file" != "$version_from_tag" ]]; then
+    echo "Using origin tag version as baseline: $version_from_tag (local VERSION is $version_from_file)"
   fi
 
   local new_version
