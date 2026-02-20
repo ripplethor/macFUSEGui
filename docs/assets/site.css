@@ -22,20 +22,6 @@ body {
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 
-header[data-scrolled="true"] {
-    background: rgba(255, 255, 255, 0.74);
-    border-color: rgba(255, 255, 255, 0.56);
-    box-shadow: 0 14px 34px rgba(8, 24, 61, 0.16);
-    backdrop-filter: blur(24px) saturate(185%);
-    -webkit-backdrop-filter: blur(24px) saturate(185%);
-}
-
-.dark header[data-scrolled="true"] {
-    background: rgba(7, 16, 37, 0.76);
-    border-color: rgba(148, 163, 184, 0.22);
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
-}
-
 #theme-fade-layer {
     position: fixed;
     inset: 0;
@@ -74,7 +60,7 @@ html.theme-fading #theme-fade-layer {
     opacity: 1;
 }
 
-.space-canvas > div {
+.space-canvas>div {
     position: absolute;
     inset: 0;
 }
@@ -141,11 +127,6 @@ html[data-fx-mode="lite"] .glass-panel {
     -webkit-backdrop-filter: blur(12px) saturate(140%);
 }
 
-html[data-fx-mode="lite"] header[data-scrolled="true"] {
-    backdrop-filter: blur(14px) saturate(150%);
-    -webkit-backdrop-filter: blur(14px) saturate(150%);
-}
-
 html[data-fx-mode="lite"] .hero-stage {
     transform: none !important;
     will-change: auto;
@@ -153,12 +134,13 @@ html[data-fx-mode="lite"] .hero-stage {
 
 html.tab-hidden .space-dust,
 html.tab-hidden .nebula-cloud,
-html.tab-hidden .starfield {
+html.tab-hidden .starfield,
+html.tab-hidden .shooting-stars {
     animation-play-state: paused !important;
 }
 
 .space-gradient {
-    transition: opacity 520ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .space-gradient-light {
@@ -172,10 +154,10 @@ html.tab-hidden .starfield {
 
 .space-gradient-dark {
     background:
-        radial-gradient(90% 64% at 18% 8%, rgba(65, 101, 206, 0.20), transparent 70%),
-        radial-gradient(86% 60% at 84% 12%, rgba(93, 78, 191, 0.20), transparent 72%),
-        radial-gradient(96% 72% at 52% 88%, rgba(26, 57, 145, 0.24), transparent 74%),
-        linear-gradient(180deg, #01030a 0%, #040a1a 42%, #071330 76%, #0c224f 100%);
+        radial-gradient(90% 64% at 18% 8%, rgba(20, 184, 166, 0.15), transparent 70%),
+        radial-gradient(86% 60% at 84% 12%, rgba(217, 70, 239, 0.15), transparent 72%),
+        radial-gradient(96% 72% at 52% 88%, rgba(59, 130, 246, 0.20), transparent 74%),
+        linear-gradient(180deg, #020617 0%, #06102b 42%, #08112b 76%, #0d1e40 100%);
     opacity: 0;
 }
 
@@ -188,45 +170,46 @@ html.tab-hidden .starfield {
 }
 
 .nebula-cloud {
-    mix-blend-mode: screen;
-    filter: blur(96px) saturate(136%);
+    mix-blend-mode: color-dodge;
+    filter: blur(86px) saturate(160%);
     transform: translate3d(0, 0, 0) scale(1.08);
-    opacity: 0.52;
+    opacity: 0.65;
 }
 
+/* 2025 Elite Colors: Deep Magenta, Electric Cyan, Royal Purple, Vivid Blue */
 .nebula-cloud-a {
     background:
-        radial-gradient(44% 34% at 21% 24%, rgba(66, 117, 245, 0.44) 0%, rgba(46, 92, 214, 0.24) 46%, transparent 78%),
-        radial-gradient(30% 24% at 14% 30%, rgba(143, 100, 255, 0.30) 0%, transparent 76%),
-        radial-gradient(28% 22% at 30% 35%, rgba(106, 176, 255, 0.24) 0%, transparent 76%);
-    animation: nebula-drift-a 48s ease-in-out infinite alternate;
+        radial-gradient(40% 30% at 20% 20%, rgba(14, 165, 233, 0.55) 0%, rgba(2, 132, 199, 0.20) 50%, transparent 80%),
+        radial-gradient(35% 25% at 12% 28%, rgba(217, 70, 239, 0.40) 0%, transparent 80%),
+        radial-gradient(28% 22% at 30% 35%, rgba(139, 92, 246, 0.30) 0%, transparent 76%);
+    animation: nebula-drift-a 42s ease-in-out infinite alternate;
 }
 
 .nebula-cloud-b {
     background:
-        radial-gradient(42% 34% at 82% 22%, rgba(131, 94, 242, 0.42) 0%, rgba(87, 96, 225, 0.23) 44%, transparent 78%),
-        radial-gradient(30% 24% at 73% 30%, rgba(82, 143, 255, 0.26) 0%, transparent 76%),
-        radial-gradient(28% 22% at 92% 32%, rgba(110, 90, 222, 0.28) 0%, transparent 76%);
-    animation: nebula-drift-b 56s ease-in-out infinite alternate;
+        radial-gradient(45% 35% at 80% 20%, rgba(168, 85, 247, 0.50) 0%, rgba(147, 51, 234, 0.25) 50%, transparent 80%),
+        radial-gradient(35% 25% at 85% 30%, rgba(6, 182, 212, 0.35) 0%, transparent 76%),
+        radial-gradient(25% 20% at 90% 35%, rgba(59, 130, 246, 0.35) 0%, transparent 76%);
+    animation: nebula-drift-b 52s ease-in-out infinite alternate;
 }
 
 .nebula-cloud-c {
     background:
-        radial-gradient(50% 38% at 52% 60%, rgba(86, 141, 245, 0.34) 0%, rgba(57, 110, 220, 0.19) 48%, transparent 78%),
-        radial-gradient(30% 26% at 44% 67%, rgba(122, 126, 238, 0.24) 0%, transparent 74%),
-        radial-gradient(24% 20% at 62% 63%, rgba(132, 187, 255, 0.18) 0%, transparent 76%);
-    animation: nebula-drift-c 64s ease-in-out infinite alternate;
-    filter: blur(108px) saturate(124%);
-    opacity: 0.44;
+        radial-gradient(55% 40% at 50% 60%, rgba(59, 130, 246, 0.45) 0%, rgba(37, 99, 235, 0.20) 50%, transparent 80%),
+        radial-gradient(35% 25% at 45% 65%, rgba(236, 72, 153, 0.30) 0%, transparent 74%),
+        radial-gradient(25% 20% at 60% 60%, rgba(14, 165, 233, 0.25) 0%, transparent 76%);
+    animation: nebula-drift-c 60s ease-in-out infinite alternate;
+    filter: blur(96px) saturate(140%);
+    opacity: 0.55;
 }
 
 .nebula-cloud-d {
     background:
-        radial-gradient(44% 32% at 32% 82%, rgba(57, 120, 245, 0.28) 0%, rgba(38, 88, 193, 0.16) 46%, transparent 80%),
-        radial-gradient(30% 24% at 38% 90%, rgba(109, 112, 230, 0.20) 0%, transparent 76%);
-    animation: nebula-drift-d 70s ease-in-out infinite alternate;
-    filter: blur(120px) saturate(118%);
-    opacity: 0.36;
+        radial-gradient(45% 35% at 30% 80%, rgba(99, 102, 241, 0.40) 0%, rgba(79, 70, 229, 0.15) 50%, transparent 80%),
+        radial-gradient(35% 25% at 35% 85%, rgba(217, 70, 239, 0.25) 0%, transparent 76%);
+    animation: nebula-drift-d 68s ease-in-out infinite alternate;
+    filter: blur(100px) saturate(130%);
+    opacity: 0.45;
 }
 
 .space-dust {
@@ -415,8 +398,73 @@ html.tab-hidden .starfield {
 
 .dark .space-vignette {
     background:
-        radial-gradient(126% 96% at 50% -24%, transparent 34%, rgba(1, 4, 14, 0.44) 100%),
-        linear-gradient(180deg, rgba(1, 4, 14, 0.08) 0%, rgba(1, 4, 14, 0.52) 100%);
+        radial-gradient(126% 96% at 50% -24%, transparent 34%, rgba(2, 6, 23, 0.6) 100%),
+        linear-gradient(180deg, rgba(2, 6, 23, 0.08) 0%, rgba(2, 6, 23, 0.70) 100%);
+}
+
+/* Elite Shooting Stars */
+.shooting-stars {
+    position: absolute;
+    inset: -100px;
+    top: 10%;
+    left: 40%;
+    width: 200%;
+    height: 100%;
+    transform: rotate(135deg);
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+.shooting-stars-reverse {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+.shooting-star {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 140px;
+    height: 1.5px;
+    background: linear-gradient(90deg, rgba(8, 145, 178, 0), rgba(129, 140, 248, 1) 80%, rgba(255, 255, 255, 1) 100%);
+    filter: drop-shadow(0 0 4px rgba(129, 140, 248, 0.8));
+    border-radius: 999px;
+    animation: shooting-star 14s ease-in-out infinite;
+    opacity: 0;
+}
+
+.shooting-star:nth-child(2) {
+    top: 20%;
+    left: 30%;
+    animation-delay: 4.5s;
+    animation-duration: 21s;
+    background: linear-gradient(90deg, rgba(30, 64, 175, 0), rgba(192, 132, 252, 1) 80%, rgba(255, 255, 255, 1) 100%);
+    filter: drop-shadow(0 0 4px rgba(192, 132, 252, 0.8));
+}
+
+.shooting-star:nth-child(3) {
+    top: 70%;
+    left: 60%;
+    animation-delay: 8.2s;
+    animation-duration: 32s;
+    background: linear-gradient(90deg, rgba(67, 56, 202, 0), rgba(56, 189, 248, 1) 80%, rgba(255, 255, 255, 1) 100%);
+    filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.8));
+}
+
+.shooting-star.reverse {
+    top: 35%;
+    left: -10vw;
+    width: 200px;
+    height: 2px;
+    animation-delay: 1.6s;
+    /* Trigger EXACTLY after the first one disappears */
+    animation-duration: 14s;
+    /* Lock sync with the initial 14s star loop */
+    background: linear-gradient(90deg, rgba(8, 145, 178, 0), rgba(236, 72, 153, 1) 80%, rgba(255, 255, 255, 1) 100%);
+    filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.9));
+    animation-name: shooting-star-left-to-right;
 }
 
 @keyframes nebula-drift-a {
@@ -508,7 +556,9 @@ html.tab-hidden .starfield {
 }
 
 @keyframes twinkle-mid {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0.44;
     }
 
@@ -526,7 +576,9 @@ html.tab-hidden .starfield {
 }
 
 @keyframes twinkle-near {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0.56;
     }
 
@@ -544,7 +596,9 @@ html.tab-hidden .starfield {
 }
 
 @keyframes twinkle-glints {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0.34;
     }
 
@@ -565,156 +619,118 @@ html.tab-hidden .starfield {
 .hero-stage {
     transform-style: preserve-3d;
     will-change: transform;
-    transition: box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.glass-stack-layer {
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
-    will-change: transform, opacity;
-}
-
-.group:hover .glass-stack-layer {
-    transform: translateY(0) scale(1) !important;
-}
-
-/* Typing Effect */
-.typing-text {
-    border-right-color: transparent;
-    animation: blink-caret .75s step-end infinite;
-}
-
-@keyframes blink-caret {
-
-    from,
-    to {
-        border-color: transparent
-    }
-
-    50% {
-        border-color: #4ade80;
-    }
-
-    /* green-400 */
-}
-
-/* Animations */
-@media (prefers-reduced-motion: no-preference) {
-    .animate-float {
-        animation: float 6s ease-in-out infinite;
-    }
-
-    .animate-pulse-glow {
-        animation: pulse-glow 3s ease-in-out infinite;
-    }
-
-    .animate-pulse-slow {
-        animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    .animate-rotate-slow {
-        animation: rotate-slow 60s linear infinite;
-        transform-origin: center;
-        transform-box: fill-box;
-    }
-
-    .animate-gradient-text {
-        animation: gradient-text 8s ease infinite;
-    }
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: .5;
-    }
-}
-
-@keyframes gradient-text {
-
-    0%,
-    100% {
-        background-position: 0% 50%;
-    }
-
-    50% {
-        background-position: 100% 50%;
-    }
-}
-
-/* Scroll Reveal */
-.reveal-on-scroll {
-    opacity: 1;
-    transform: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .space-dust,
-    .nebula-cloud,
-    .starfield {
-        animation: none !important;
-        transform: none !important;
-    }
-
-    html.theme-fading *,
-    html.theme-fading *::before,
-    html.theme-fading *::after {
-        transition: none !important;
-    }
-
-    .motion-enabled .reveal-on-scroll {
-        transition: none;
-        opacity: 1;
-        transform: none;
-    }
-
-    .hero-stage {
-        transform: none !important;
-    }
-}
-
-.motion-enabled .reveal-on-scroll {
+/* FAQ Accordion Animations */
+.faq-panel {
+    display: grid;
+    grid-template-rows: 0fr;
     opacity: 0;
-    transform: translate3d(0, 24px, 0) scale(0.992);
-    transition:
-        opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
-        transform 680ms cubic-bezier(0.16, 1, 0.3, 1);
-    transition-delay: var(--reveal-delay, 0ms);
-    will-change: opacity, transform;
-    backface-visibility: hidden;
 }
 
-.motion-enabled .reveal-on-scroll[data-reveal="left"] {
-    transform: translate3d(-24px, 16px, 0) scale(0.992);
-}
-
-.motion-enabled .reveal-on-scroll[data-reveal="right"] {
-    transform: translate3d(24px, 16px, 0) scale(0.992);
-}
-
-.motion-enabled .reveal-on-scroll[data-reveal="up-soft"] {
-    transform: translate3d(0, 18px, 0) scale(0.996);
-}
-
-.motion-enabled .reveal-on-scroll.reveal-visible {
+.faq-panel.is-open {
+    grid-template-rows: 1fr;
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
 }
 
-.delay-100 {
-    --reveal-delay: 70ms;
+.faq-inner {
+    overflow: hidden;
 }
 
-.delay-200 {
-    --reveal-delay: 140ms;
+/* Elite FAQ Active Vibe */
+.faq-active {
+    background: linear-gradient(145deg, rgba(30, 64, 175, 0.04), rgba(192, 132, 252, 0.08));
+    border-color: rgba(192, 132, 252, 0.4);
+    box-shadow: 0 0 24px rgba(192, 132, 252, 0.15);
+    transform: scale(1.02);
+    z-index: 10;
 }
 
-.delay-300 {
-    --reveal-delay: 210ms;
+.faq-active [data-accordion-trigger] span.font-bold {
+    background: linear-gradient(90deg, #3b82f6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.dark .faq-active {
+    background: linear-gradient(145deg, rgba(30, 64, 175, 0.1), rgba(192, 132, 252, 0.15));
+}
+
+.dark .faq-active [data-accordion-trigger] span.font-bold {
+    background: linear-gradient(90deg, #60a5fa, #f472b6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Hard-disable any reveal/lazy paint behavior for feature cards */
+#features .glass-panel {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    transition: none !important;
+    content-visibility: visible !important;
+    contain: none !important;
+}
+
+#features .glass-panel * {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transition: none !important;
+}
+
+/* Hard-disable any viewport/lazy reveal behavior for hero visual block */
+#hero .hero-visual,
+#hero .hero-visual * {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transition: none !important;
+    animation: none !important;
+    content-visibility: visible !important;
+    contain: none !important;
+}
+
+@keyframes shooting-star {
+    0% {
+        transform: translateX(0);
+        opacity: 0;
+    }
+
+    1% {
+        opacity: 1;
+    }
+
+    10% {
+        transform: translateX(800px);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateX(800px);
+        opacity: 0;
+    }
+}
+
+@keyframes shooting-star-left-to-right {
+    0% {
+        transform: rotate(20deg) translateX(0);
+        opacity: 0;
+    }
+
+    2% {
+        opacity: 1;
+    }
+
+    15% {
+        transform: rotate(20deg) translateX(120vw);
+        opacity: 0;
+    }
+
+    100% {
+        transform: rotate(20deg) translateX(120vw);
+        opacity: 0;
+    }
 }
 
 /* Focus Accessibility */
@@ -732,7 +748,81 @@ html.tab-hidden .starfield {
     filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.4));
 }
 
-/* Accordion Transition */
-.accordion-content {
-    transition: grid-template-rows 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+@media (pointer: coarse), (max-width: 1200px) {
+    .starfield-near,
+    .star-glints {
+        display: none;
+    }
+
+    .nebula-cloud {
+        filter: blur(64px) saturate(125%);
+        opacity: 0.38;
+    }
+
+    .space-dust {
+        opacity: 0.08;
+    }
+}
+
+/* Motion policy: keep background space field animations only */
+html {
+    scroll-behavior: auto !important;
+}
+
+.space-dust {
+    animation: dust-drift 95s linear infinite !important;
+}
+
+.nebula-cloud-a {
+    animation: nebula-drift-a 42s ease-in-out infinite alternate !important;
+}
+
+.nebula-cloud-b {
+    animation: nebula-drift-b 52s ease-in-out infinite alternate !important;
+}
+
+.nebula-cloud-c {
+    animation: nebula-drift-c 60s ease-in-out infinite alternate !important;
+}
+
+.nebula-cloud-d {
+    animation: nebula-drift-d 68s ease-in-out infinite alternate !important;
+}
+
+.starfield-far {
+    animation: star-drift-far 220s linear infinite !important;
+}
+
+.starfield-mid {
+    animation: star-drift-mid 165s linear infinite, twinkle-mid 9s ease-in-out infinite !important;
+}
+
+.starfield-near {
+    animation: star-drift-near 132s linear infinite, twinkle-near 7.8s ease-in-out infinite !important;
+}
+
+.star-glints {
+    animation: twinkle-glints 6.6s ease-in-out infinite alternate !important;
+}
+
+.shooting-star {
+    animation: shooting-star 14s ease-in-out infinite !important;
+}
+
+.shooting-star:nth-child(2) {
+    animation-delay: 4.5s !important;
+    animation-duration: 21s !important;
+}
+
+.shooting-star:nth-child(3) {
+    animation-delay: 8.2s !important;
+    animation-duration: 32s !important;
+}
+
+.shooting-star.reverse {
+    animation-name: shooting-star-left-to-right !important;
+    animation-delay: 1.6s !important;
+    animation-duration: 14s !important;
+    animation-iteration-count: infinite !important;
+    animation-timing-function: ease-in-out !important;
 }
