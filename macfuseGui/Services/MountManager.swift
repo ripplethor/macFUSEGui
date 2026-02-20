@@ -145,14 +145,22 @@ actor MountManager {
 
             if let mountedRecord {
                 connectedPreserveMisses[remote.id] = 0
-                // Extra health probe: a mount can exist but be stale/hung.
-                let health = try await runner.run(
-                    executable: "/usr/bin/stat",
-                    arguments: ["-f", "%N", remote.localMountPoint],
-                    timeout: mountResponsivenessTimeout
+                // Extra health probe: a mount can exist but still be stale/hung.
+                // Check both metadata responsiveness and the ability to query directory contents.
+                let metadataHealthy = await isMountPathResponsive(
+                    remote.localMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
                 )
+                let directoryHealthy = metadataHealthy
+                    ? await isMountDirectoryQueryable(
+                        remote.localMountPoint,
+                        remoteID: remote.id,
+                        operationID: operationID
+                    )
+                    : false
 
-                if health.timedOut || health.exitCode != 0 {
+                if !metadataHealthy || !directoryHealthy {
                     // Important: refreshStatus should stay lightweight.
                     // Do not run full unmount cleanup in this probe path, because that can
                     // take tens of seconds and block mount status refresh flow.
@@ -867,6 +875,46 @@ actor MountManager {
                 level: .debug,
                 category: "mount",
                 message: "probe end op=mount-responsive-check remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) error=\(error.localizedDescription)"
+            )
+            return false
+        }
+    }
+
+    /// Beginner note: Some broken FUSE mounts can still pass stat but fail directory reads
+    /// with "Device not configured". This probe checks directory query health cheaply.
+    private func isMountDirectoryQueryable(
+        _ mountPoint: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil
+    ) async -> Bool {
+        let startedAt = Date()
+        let remoteText = remoteID?.uuidString ?? "-"
+        let operationText = operationID?.uuidString ?? "-"
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "probe start op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint)"
+        )
+
+        do {
+            let result = try await runner.run(
+                executable: "/usr/bin/find",
+                arguments: [mountPoint, "-mindepth", "1", "-maxdepth", "1", "-print", "-quit"],
+                timeout: mountResponsivenessTimeout
+            )
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
+            )
+            return !result.timedOut && result.exitCode == 0
+        } catch {
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) error=\(error.localizedDescription)"
             )
             return false
         }

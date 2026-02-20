@@ -193,6 +193,26 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("could not be verified"))
     }
 
+    /// Beginner note: A stale FUSE mount can pass metadata stat probes but fail directory queries.
+    /// Refresh should mark this as error so recovery can reconnect instead of showing false-connected.
+    func testRefreshDetectsStaleMountWhenDirectoryQueryFails() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/stale-dir-query"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            alwaysResponsivePaths: [mountPoint],
+            unreadableMountedPaths: [mountPoint]
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Stale Directory Query", mountPoint: mountPoint)
+
+        let connected = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(connected.state, .connected)
+
+        let refreshed = await manager.refreshStatus(remote: remote)
+        XCTAssertEqual(refreshed.state, .error)
+        XCTAssertTrue((refreshed.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+    }
+
     private func makeManager(runner: ProcessRunning) -> MountManager {
         let diagnostics = DiagnosticsService()
         let parser = MountStateParser()
@@ -238,6 +258,7 @@ private struct ReadyDependencyChecker: DependencyChecking {
 private actor FakeMountRunner: ProcessRunning {
     private var mountedPoints: Set<String> = []
     private let alwaysResponsivePaths: Set<String>
+    private let unreadableMountedPaths: Set<String>
     private let connectDelayByMountPoint: [String: TimeInterval]
     private var connectDelayScheduleByMountPoint: [String: [TimeInterval]]
     private let mountInspectionDelay: TimeInterval
@@ -246,12 +267,14 @@ private actor FakeMountRunner: ProcessRunning {
         connectDelayByMountPoint: [String: TimeInterval],
         connectDelayScheduleByMountPoint: [String: [TimeInterval]] = [:],
         mountInspectionDelay: TimeInterval = 0,
-        alwaysResponsivePaths: Set<String> = []
+        alwaysResponsivePaths: Set<String> = [],
+        unreadableMountedPaths: Set<String> = []
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
         self.connectDelayScheduleByMountPoint = connectDelayScheduleByMountPoint
         self.mountInspectionDelay = mountInspectionDelay
         self.alwaysResponsivePaths = alwaysResponsivePaths
+        self.unreadableMountedPaths = unreadableMountedPaths
     }
 
     func simulateExternalUnmount(mountPoint: String) {
@@ -363,6 +386,21 @@ private actor FakeMountRunner: ProcessRunning {
                 stdout: isMounted ? path : "",
                 stderr: isMounted ? "" : "No such file or directory",
                 exitCode: isMounted ? 0 : 1,
+                timedOut: false,
+                duration: Date().timeIntervalSince(startedAt)
+            )
+        }
+
+        if executable == "/usr/bin/find", let path = arguments.first {
+            let isMounted = mountedPoints.contains(path)
+            let isUnreadable = unreadableMountedPaths.contains(path)
+            let success = isMounted && !isUnreadable
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: success ? path : "",
+                stderr: success ? "" : (isMounted ? "Device not configured" : "No such file or directory"),
+                exitCode: success ? 0 : 1,
                 timedOut: false,
                 duration: Date().timeIntervalSince(startedAt)
             )
