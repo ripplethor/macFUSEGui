@@ -7,6 +7,7 @@
 // Maintenance tip: Start reading top-to-bottom once, then follow one user action end-to-end through call sites.
 
 import Foundation
+import LocalAuthentication
 import Security
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
@@ -115,9 +116,7 @@ final class KeychainService: KeychainServiceProtocol {
         var query = aggregateQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-        if !allowUserInteraction {
-            query = nonInteractive(query)
-        }
+        query = authenticationScopedQuery(query, allowUserInteraction: allowUserInteraction)
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -150,8 +149,8 @@ final class KeychainService: KeychainServiceProtocol {
 
     private func upsertAggregateData(_ data: Data, allowUserInteraction: Bool) throws {
         let query = aggregateQuery()
-        let lookupQuery = allowUserInteraction ? query : nonInteractive(query)
-        let updateQuery = allowUserInteraction ? query : nonInteractive(query)
+        let lookupQuery = authenticationScopedQuery(query, allowUserInteraction: allowUserInteraction)
+        let updateQuery = authenticationScopedQuery(query, allowUserInteraction: allowUserInteraction)
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data
         ]
@@ -171,10 +170,7 @@ final class KeychainService: KeychainServiceProtocol {
         if status == errSecItemNotFound {
             var insert = query
             insert.merge(insertAttributes) { current, _ in current }
-            var insertQuery = insert as CFDictionary
-            if !allowUserInteraction {
-                insertQuery = nonInteractive(insert) as CFDictionary
-            }
+            let insertQuery = authenticationScopedQuery(insert, allowUserInteraction: allowUserInteraction) as CFDictionary
 
             let insertStatus = SecItemAdd(insertQuery, nil)
             guard insertStatus == errSecSuccess else {
@@ -197,7 +193,10 @@ final class KeychainService: KeychainServiceProtocol {
                 kSecValueData as String: data,
                 kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
             ]
-            let insertQuery = allowUserInteraction ? insertQueryDictionary : nonInteractive(insertQueryDictionary)
+            let insertQuery = authenticationScopedQuery(
+                insertQueryDictionary,
+                allowUserInteraction: allowUserInteraction
+            )
             let insertStatus = SecItemAdd(insertQuery as CFDictionary, nil)
             if insertStatus == errSecSuccess {
                 return
@@ -215,7 +214,7 @@ final class KeychainService: KeychainServiceProtocol {
     }
 
     private func deleteAggregateStatus() -> OSStatus {
-        SecItemDelete(nonInteractive(aggregateQuery()) as CFDictionary)
+        SecItemDelete(authenticationScopedQuery(aggregateQuery(), allowUserInteraction: false) as CFDictionary)
     }
 
     private func aggregateQuery() -> [String: Any] {
@@ -226,9 +225,14 @@ final class KeychainService: KeychainServiceProtocol {
         ]
     }
 
-    private func nonInteractive(_ query: [String: Any]) -> [String: Any] {
+    private func authenticationScopedQuery(
+        _ query: [String: Any],
+        allowUserInteraction: Bool
+    ) -> [String: Any] {
         var query = query
-        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        let context = LAContext()
+        context.interactionNotAllowed = !allowUserInteraction
+        query[kSecUseAuthenticationContext as String] = context
         return query
     }
 
