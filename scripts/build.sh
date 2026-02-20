@@ -16,6 +16,8 @@ CONFIGURATION="${CONFIGURATION:-Debug}"
 ARCH_OVERRIDE="${ARCH_OVERRIDE:-arm64}"
 CODE_SIGNING_ALLOWED="${CODE_SIGNING_ALLOWED:-NO}"
 STRIP_RELEASE_BINARY="${STRIP_RELEASE_BINARY:-1}"
+APP_MARKETING_VERSION="${APP_MARKETING_VERSION:-}"
+APP_BUILD_VERSION="${APP_BUILD_VERSION:-}"
 OUTPUT_DIR="$ROOT_DIR/build"
 DEFAULT_OUTPUT_APP="$OUTPUT_DIR/macfuseGui.app"
 
@@ -30,6 +32,14 @@ normalize_arch() {
       exit 1
       ;;
   esac
+}
+
+is_valid_semver() {
+  [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+is_valid_build_version() {
+  [[ "$1" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]
 }
 
 resolve_bundle_executable_name() {
@@ -182,6 +192,22 @@ build_single_variant() {
     CODE_SIGNING_ALLOWED="$CODE_SIGNING_ALLOWED"
     build
   )
+
+  if [[ -n "$APP_MARKETING_VERSION" ]]; then
+    is_valid_semver "$APP_MARKETING_VERSION" || {
+      echo "Invalid APP_MARKETING_VERSION: $APP_MARKETING_VERSION (expected X.Y.Z)" >&2
+      exit 1
+    }
+    xcodebuild_args+=( "MARKETING_VERSION=$APP_MARKETING_VERSION" )
+  fi
+
+  if [[ -n "$APP_BUILD_VERSION" ]]; then
+    is_valid_build_version "$APP_BUILD_VERSION" || {
+      echo "Invalid APP_BUILD_VERSION: $APP_BUILD_VERSION (expected digits or dot-separated digits)" >&2
+      exit 1
+    }
+    xcodebuild_args+=( "CURRENT_PROJECT_VERSION=$APP_BUILD_VERSION" )
+  fi
 
   case "$build_arch" in
     arm64|x86_64)

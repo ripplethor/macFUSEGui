@@ -220,6 +220,15 @@ bump_patch() {
   echo "${major}.${minor}.${patch}"
 }
 
+version_to_build_number() {
+  local ver="$1"
+  local major minor patch
+  major="${ver%%.*}"
+  minor="${ver#*.}"; minor="${minor%%.*}"
+  patch="${ver##*.}"
+  echo $((major * 10000 + minor * 100 + patch))
+}
+
 list_remote_release_tags() {
   git ls-remote --tags --refs origin 'refs/tags/v[0-9]*.[0-9]*.[0-9]*' \
     | awk '{print $2}' \
@@ -506,6 +515,8 @@ main() {
   else
     new_version="$(bump_patch "$base_version")"
   fi
+  local new_build_version
+  new_build_version="$(version_to_build_number "$new_version")"
   local tag="v${new_version}"
   CREATED_NOTES_FILE="$(mktemp -t macfusegui-release-notes.XXXXXX)"
   write_release_notes_file "$CREATED_NOTES_FILE" "$previous_tag"
@@ -540,6 +551,7 @@ main() {
   echo "Git branch:       $branch"
   echo "Base version:     $base_version"
   echo "New version:      $new_version"
+  echo "Build version:    $new_build_version"
   echo "Tag:              $tag"
   echo "Configuration:    $CONFIGURATION"
   echo "Arch override:    $ARCH_OVERRIDE_NORMALIZED"
@@ -556,7 +568,7 @@ main() {
 
   if [[ "$DRY_RUN" == "1" ]]; then
     if [[ "$SKIP_BUILD" != "1" ]]; then
-      echo "[dry-run] Would run build: CONFIGURATION=$CONFIGURATION ARCH_OVERRIDE=$ARCH_OVERRIDE_NORMALIZED CODE_SIGNING_ALLOWED=$CODE_SIGNING_ALLOWED $REPO_ROOT/scripts/build.sh"
+      echo "[dry-run] Would run build: CONFIGURATION=$CONFIGURATION ARCH_OVERRIDE=$ARCH_OVERRIDE_NORMALIZED CODE_SIGNING_ALLOWED=$CODE_SIGNING_ALLOWED APP_MARKETING_VERSION=$new_version APP_BUILD_VERSION=$new_build_version $REPO_ROOT/scripts/build.sh"
     else
       echo "[dry-run] Build step skipped (SKIP_BUILD=1)."
     fi
@@ -572,6 +584,8 @@ main() {
     if ! CONFIGURATION="$CONFIGURATION" \
       ARCH_OVERRIDE="$ARCH_OVERRIDE_NORMALIZED" \
       CODE_SIGNING_ALLOWED="$CODE_SIGNING_ALLOWED" \
+      APP_MARKETING_VERSION="$new_version" \
+      APP_BUILD_VERSION="$new_build_version" \
       "$REPO_ROOT/scripts/build.sh" 2>&1 | tee "$build_log"; then
       rm -f "$build_log"
       die "Build failed."
