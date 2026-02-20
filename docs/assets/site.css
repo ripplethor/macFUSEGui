@@ -127,6 +127,11 @@ html[data-fx-mode="lite"] .glass-panel {
     -webkit-backdrop-filter: blur(12px) saturate(140%);
 }
 
+html[data-fx-mode="lite"] header[data-scrolled="true"] {
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
 html[data-fx-mode="lite"] .hero-stage {
     transform: none !important;
     will-change: auto;
@@ -370,7 +375,7 @@ html.tab-hidden .shooting-stars {
         radial-gradient(circle at 74% 24%, rgba(255, 255, 255, 0.94) 0 1.5px, rgba(147, 197, 253, 0.40) 3.9px, transparent 8px),
         radial-gradient(circle at 89% 72%, rgba(255, 255, 255, 0.90) 0 1.35px, rgba(125, 211, 252, 0.32) 3.5px, transparent 7px);
     opacity: 0.20;
-    filter: blur(0.24px) drop-shadow(0 0 10px rgba(191, 219, 254, 0.25));
+    filter: none;
     animation: twinkle-glints 6.6s ease-in-out infinite alternate;
 }
 
@@ -664,33 +669,6 @@ html.tab-hidden .shooting-stars {
     -webkit-text-fill-color: transparent;
 }
 
-/* Hard-disable any reveal/lazy paint behavior for feature cards */
-#features .glass-panel {
-    opacity: 1 !important;
-    visibility: visible !important;
-    transform: none !important;
-    transition: none !important;
-    content-visibility: visible !important;
-    contain: none !important;
-}
-
-#features .glass-panel * {
-    opacity: 1 !important;
-    visibility: visible !important;
-    transition: none !important;
-}
-
-/* Hard-disable any viewport/lazy reveal behavior for hero visual block */
-#hero .hero-visual,
-#hero .hero-visual * {
-    opacity: 1 !important;
-    visibility: visible !important;
-    transition: none !important;
-    animation: none !important;
-    content-visibility: visible !important;
-    contain: none !important;
-}
-
 @keyframes shooting-star {
     0% {
         transform: translateX(0);
@@ -803,6 +781,7 @@ html {
 
 .star-glints {
     animation: twinkle-glints 6.6s ease-in-out infinite alternate !important;
+    filter: none !important;
 }
 
 .shooting-star {
