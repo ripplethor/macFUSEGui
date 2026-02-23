@@ -1837,11 +1837,13 @@ final class RemotesViewModel: ObservableObject {
                     category: "recovery",
                     message: "Network became reachable. Running staged recovery passes."
                 )
+                // Run deferred startup intent first so staged recovery refresh does
+                // not immediately collide and skip startup connect operations.
+                await self.runPendingStartupAutoConnect(trigger: "network-restored")
                 self.scheduleRecoveryBurst(
                     trigger: "network-restored",
                     delaySeconds: Self.recoveryBurstDelays(for: "network-restored")
                 )
-                await self.runPendingStartupAutoConnect(trigger: "network-restored")
             }
         } else {
             networkRestoreDebounceTask?.cancel()
@@ -2329,53 +2331,41 @@ final class RemotesViewModel: ObservableObject {
         timeoutSeconds: TimeInterval,
         operation: @escaping @Sendable () async -> RemoteStatus
     ) async -> (RemoteStatus?, Bool) {
-        // Resume gate guarantees continuation is only resumed once even though
-        // both the operation task and timeout task race to finish first.
-        // @unchecked Sendable is safe here because all mutable state is guarded by lock.
-        final class ResumeGate: @unchecked Sendable {
-            private let lock = NSLock()
-            private var resumed = false
-
-            func resumeIfNeeded(_ action: () -> Void) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !resumed else {
-                    return
-                }
-                resumed = true
-                action()
-            }
-        }
-
         guard timeoutSeconds > 0 else {
             return (await operation(), false)
         }
 
         let timeoutNanos = UInt64(timeoutSeconds * 1_000_000_000)
-        let operationTask = Task.detached(priority: .userInitiated) {
-            await operation()
-        }
-
-        return await withCheckedContinuation { continuation in
-            let gate = ResumeGate()
-            let timeoutTask = Task.detached(priority: .utility) {
-                try? await Task.sleep(nanoseconds: timeoutNanos)
-                guard !Task.isCancelled else {
-                    return
-                }
-                operationTask.cancel()
-                gate.resumeIfNeeded {
-                    continuation.resume(returning: (nil, true))
+        return await withTaskGroup(of: (RemoteStatus?, Bool).self) { group in
+            // Child tasks inherit caller cancellation so superseded operations are
+            // cancelled instead of continuing detached in the background.
+            group.addTask(priority: .userInitiated) {
+                let status = await operation()
+                return (status, false)
+            }
+            group.addTask(priority: .utility) {
+                do {
+                    try await Task.sleep(nanoseconds: timeoutNanos)
+                    return (nil, true)
+                } catch {
+                    // Timeout watcher was cancelled (operation finished or caller cancelled).
+                    return (nil, false)
                 }
             }
 
-            Task.detached {
-                let status = await operationTask.value
-                timeoutTask.cancel()
-                gate.resumeIfNeeded {
-                    continuation.resume(returning: (status, false))
+            while let result = await group.next() {
+                if result.1 || result.0 != nil {
+                    group.cancelAll()
+                    return result
+                }
+                if Task.isCancelled {
+                    group.cancelAll()
+                    return (nil, false)
                 }
             }
+
+            group.cancelAll()
+            return (nil, Task.isCancelled)
         }
     }
 
