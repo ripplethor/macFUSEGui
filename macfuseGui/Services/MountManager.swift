@@ -316,6 +316,7 @@ actor MountManager {
 
         do {
             try throwIfCancelled()
+            var preConnectCleanupPerformed = false
             // If mount path is already mounted, clear stale/previous mount before reconnect.
             let existingMountRecord: MountRecord?
             do {
@@ -344,6 +345,7 @@ actor MountManager {
                     queuedAt: Date(),
                     operationID: operationID
                 )
+                preConnectCleanupPerformed = true
 
                 let stillMounted = try await currentMountRecord(
                     for: remote.localMountPoint,
@@ -358,7 +360,31 @@ actor MountManager {
             }
 
             try throwIfCancelled()
-            try ensureLocalMountPointReady(remote.localMountPoint)
+            do {
+                try ensureLocalMountPointReady(remote.localMountPoint)
+            } catch {
+                let shouldRetryAfterCleanup = !preConnectCleanupPerformed
+                    && shouldRetryConnectAfterMountPointPreparationFailure(error)
+                if shouldRetryAfterCleanup {
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Mount point preparation failed for \(remote.displayName) at \(remote.localMountPoint). Attempting one cleanup pass before retry: \(error.localizedDescription)"
+                    )
+
+                    await forceStopProcesses(
+                        for: remote,
+                        queuedAt: Date(),
+                        operationID: operationID
+                    )
+                    preConnectCleanupPerformed = true
+
+                    try throwIfCancelled()
+                    try ensureLocalMountPointReady(remote.localMountPoint)
+                } else {
+                    throw error
+                }
+            }
 
             let status = try await connectWithRetry(
                 remote: remote,
@@ -728,6 +754,26 @@ actor MountManager {
         }
 
         throw lastError ?? AppError.unknown("Mount failed")
+    }
+
+    /// Beginner note: A stale FUSE mount can surface as local mount-point creation failures.
+    /// Retry once after bounded cleanup when the message looks like a stale filesystem condition.
+    private func shouldRetryConnectAfterMountPointPreparationFailure(_ error: Error) -> Bool {
+        let message = error.localizedDescription.lowercased()
+        let mountPointCreationFailure = message.contains("local mount point could not be created")
+            || message.contains("local mount point does not exist and could not be created")
+        guard mountPointCreationFailure else {
+            return false
+        }
+
+        return message.contains("input/output")
+            || message.contains("device not configured")
+            || message.contains("resource busy")
+            || message.contains("operation timed out")
+            || message.contains("could not be saved")
+            || message.contains("couldn't be saved")
+            || message.contains("couldn’t be saved")
+            || message.contains("stale mount")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
