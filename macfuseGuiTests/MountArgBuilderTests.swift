@@ -109,6 +109,61 @@ final class MountArgBuilderTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
+    func testBracketedIPv6HostPassesThroughUnchangedInSourceArgument() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        // Validation requires IPv6 addresses to be pre-bracketed ([::1]).
+        // The builder must preserve that format so sshfs can parse host:path correctly.
+        let remote = RemoteConfig(
+            displayName: "IPv6 Server",
+            host: "[::1]",
+            port: 22,
+            username: "dev",
+            authMode: .privateKey,
+            privateKeyPath: "/Users/dev/.ssh/id_ed25519",
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/ipv6-server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        XCTAssertTrue(command.arguments.contains("dev@[::1]:/srv"))
+    }
+
+    func testBracketedIPv6FullAddressPassesThroughUnchanged() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "IPv6 Server",
+            host: "[2001:db8::1]",
+            port: 22,
+            username: "alice",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/home/alice",
+            localMountPoint: "/Volumes/ipv6-remote"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        XCTAssertTrue(command.arguments.contains("alice@[2001:db8::1]:/home/alice"))
+    }
+
+    func testPlainHostnameIsNotBracketed() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        XCTAssertTrue(command.arguments.contains("dev@example.com:/srv"))
+        XCTAssertFalse(command.arguments.contains("[example.com]"))
+    }
+
+    /// Beginner note: This method is one step in the feature workflow for this file.
     func testFallbackVolumeNameIncludesUniqueSeedWhenDisplayAndHostAreNonAscii() {
         let builder = MountCommandBuilder(redactionService: RedactionService())
         let remote = RemoteConfig(

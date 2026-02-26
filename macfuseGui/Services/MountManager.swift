@@ -770,7 +770,7 @@ actor MountManager {
     ) async {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
         let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
-        let connectionNeedle = "\(remote.username)@\(remote.host):\(remote.remoteDirectory)"
+        let connectionNeedle = "\(remote.username)@\(sshHostArgument(remote.host)):\(remote.remoteDirectory)"
         let postStopAction = skipForceUnmount ? "skipping force-unmount by request." : "attempting force-unmount anyway."
 
         do {
@@ -1402,13 +1402,9 @@ actor MountManager {
 
         let source = fields[0]
         let mountedField = fields.dropFirst(5).joined(separator: " ")
-        let decodedMountedField = decodeDFEscapedPath(mountedField)
+        let decodedMountedField = mountStateParser.decodeEscapedMountField(mountedField)
         let mountedOn = URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
         return (source, mountedOn)
-    }
-
-    private func decodeDFEscapedPath(_ value: String) -> String {
-        value.replacingOccurrences(of: "\\040", with: " ")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

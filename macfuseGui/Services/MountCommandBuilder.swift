@@ -63,7 +63,7 @@ final class MountCommandBuilder {
             args.append(option)
         }
 
-        let source = "\(remote.username)@\(remote.host):\(normalizedRemotePath)"
+        let source = "\(remote.username)@\(sshHostArgument(remote.host)):\(normalizedRemotePath)"
         args.append(source)
         args.append(remote.localMountPoint)
 
@@ -193,4 +193,14 @@ final class MountCommandBuilder {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: ",", with: "\\,")
     }
+}
+
+/// Returns the host wrapped in brackets for IPv6 addresses, which contain colons that
+/// would otherwise be ambiguous in the `user@host:path` sshfs argument format.
+/// Plain hostnames and already-bracketed addresses are returned unchanged.
+func sshHostArgument(_ host: String) -> String {
+    guard host.contains(":"), !host.hasPrefix("[") else {
+        return host
+    }
+    return "[\(host)]"
 }
