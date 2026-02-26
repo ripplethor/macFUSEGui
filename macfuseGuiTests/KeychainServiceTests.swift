@@ -27,4 +27,30 @@ final class KeychainServiceTests: XCTestCase {
         let deleted = try keychain.readPassword(remoteID: remoteID)
         XCTAssertNil(deleted)
     }
+
+    func testReadPasswordStripsLeadingTrailingWhitespace() throws {
+        let serviceName = "com.visualweb.macfusegui.tests.\(UUID().uuidString)"
+        let keychain = KeychainService(service: serviceName)
+        let remoteID = UUID().uuidString
+
+        // A password pasted with a trailing newline should be stored and returned trimmed
+        // so that authentication does not silently fail with unexpected whitespace.
+        try keychain.savePassword(remoteID: remoteID, password: " secret\n")
+        let readBack = try keychain.readPassword(remoteID: remoteID)
+        XCTAssertEqual(readBack, "secret")
+
+        try keychain.deletePassword(remoteID: remoteID)
+    }
+
+    func testReadPasswordReturnsNilForWhitespaceOnlyPassword() throws {
+        let serviceName = "com.visualweb.macfusegui.tests.\(UUID().uuidString)"
+        let keychain = KeychainService(service: serviceName)
+        let remoteID = UUID().uuidString
+
+        try keychain.savePassword(remoteID: remoteID, password: "   ")
+        let readBack = try keychain.readPassword(remoteID: remoteID)
+        XCTAssertNil(readBack)
+
+        try keychain.deletePassword(remoteID: remoteID)
+    }
 }

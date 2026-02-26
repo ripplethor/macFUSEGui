@@ -83,7 +83,8 @@ final class KeychainService: KeychainServiceProtocol {
     func readPassword(remoteID: String, allowUserInteraction: Bool) throws -> String? {
         let allowUserInteraction = allowUserInteraction && allowInteractiveReads
         if let cached = cachedPassword(for: remoteID) {
-            return cached
+            let trimmed = cached.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
         }
 
         let stored: String? = try withAggregateLock { () throws -> String? in
@@ -92,7 +93,7 @@ final class KeychainService: KeychainServiceProtocol {
                 return nil
             }
             let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : stored
+            return trimmed.isEmpty ? nil : trimmed
         }
 
         if let stored {
