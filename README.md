@@ -222,6 +222,7 @@ Debug launch:
 - **[New Contributor Guide](CONTRIBUTING.md)**: Start here if you want to modify the app.
 - **[Architecture & Jargon Buster](ARCHITECTURE.md)**: Visual diagrams and plain-English explanations.
 - **[Safe Change Rules (AGENTS.md)](AGENTS.md)**: Critical rules for AI agents and developers.
+- **[Commit & Push Workflow (COMMIT_WORKFLOW.md)](COMMIT_WORKFLOW.md)**: Commit format, changelog prefix rules, and release notes guidance.
 
 ## Security Notes
 
@@ -229,6 +230,8 @@ Debug launch:
 - No shell interpolation for user input.
 - Password mode uses temporary `SSH_ASKPASS` helper (`0700`) and ephemeral env vars.
 - Passwords are never stored in JSON or logs.
+- `KeychainService.readPassword` trims leading/trailing whitespace on read — prevents silent auth failures from clipboard-pasted trailing newlines without altering the stored credential.
+- IPv6 host addresses are automatically bracketed (`[::1]`) in sshfs arguments; bare IPv6 input is also rejected at the validation layer.
 - Diagnostics redact sensitive content.
 
 ## Browser Subsystem Notes

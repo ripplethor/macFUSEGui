@@ -108,6 +108,11 @@ Secrets:
 - Keychain service: `com.visualweb.macfusegui.password`
 - Account key: remote UUID string
 
+Password read contract:
+- `KeychainService.readPassword` trims leading/trailing whitespace before returning.
+- Returns `nil` if the stored value is whitespace-only after trimming.
+- Policy: SSH passwords with intentional surrounding whitespace are not a real-world case; trimming prevents silent auth failures from clipboard-pasted trailing newlines.
+
 Security invariants:
 - Never write passwords to JSON.
 - Never log passwords/secrets.
@@ -150,6 +155,12 @@ Command builder nuances:
 - Windows path normalization for sshfs source path.
 - Stable `volname` derivation from display name + remote path leaf.
 - Password-specific ssh options that previously broke macFUSE are intentionally omitted.
+- IPv6 host addresses are bracketed (`[::1]`) via `sshHostArgument()` in both the sshfs source arg (`MountCommandBuilder`) and the process-search connection needle (`MountManager.forceStopProcesses`). `ValidationService` enforces pre-bracketed input at the save boundary; `sshHostArgument()` is defence-in-depth for any path that bypasses validation.
+
+df path decoding:
+- `MountStateParser.decodeEscapedMountField` is the canonical decoder for macOS `mount` and `df` escape sequences.
+- Handles the full octal range `\001`–`\377`. Do not replace with ad-hoc single-character substitution (`\040` → space only).
+- Used by both `MountManager` (df-path comparison in `currentMountRecordViaDF`) and `UnmountService` (df-based mount confirmation).
 
 ## 7) Per-Remote Operation Supervisor (Critical)
 
@@ -523,6 +534,9 @@ Tests:
 10. Deadline-bounded libssh2 bridge calls (no indefinite C-level browser waits).
 11. Launch-at-login dual-path support (SMAppService + LaunchAgent fallback).
 12. ProcessRunner capture shutdown before terminate/SIGKILL to avoid post-timeout stdout/stderr races.
+13. `KeychainService.readPassword` trims whitespace before returning — prevents silent auth failures from clipboard-pasted trailing newlines without changing the stored credential.
+14. `sshHostArgument()` brackets IPv6 host addresses in both the sshfs source arg and the connection-needle process search — prevents ambiguous `user@::1:/path` colons from breaking sshfs and process matching.
+15. `if !Task.isCancelled` guards in `scheduleRecoveryBurst` and `scheduleAutoReconnect` defer blocks — prevents a cancelled task's cleanup from clobbering the replacement task's reference on the next main-actor turn.
 
 ## 20) Safe-Change Rules for Future Agents
 
@@ -543,3 +557,6 @@ Tests:
 15. Never log secrets.
 16. Preserve plugin registry safety rules (`/usr/bin/open`/`/usr/bin/env`, `{folderPath}` placeholder requirement).
 17. Preserve preferred-plugin + fallback semantics and Finder fallback on complete editor-open failure.
+18. Keep `KeychainService.readPassword` trimming — do not return the raw stored value with surrounding whitespace intact.
+19. Keep `sshHostArgument()` wrapping in `MountCommandBuilder.build` and `MountManager.forceStopProcesses` — do not interpolate `remote.host` directly into `user@host:path` strings.
+20. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect` — removing them reintroduces the stale-defer clobber of replacement task references.

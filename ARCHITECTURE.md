@@ -99,6 +99,10 @@ Watchdogs:
 
 This prevents false dropouts and reconnect storms from single probe misses.
 
+Mount path escape decoding:
+- `MountStateParser.decodeEscapedMountField` is the canonical decoder for macOS `mount` and `df -P` escape sequences.
+- Handles full octal range `\001`–`\377`. Both `MountManager` and `UnmountService` use it for df-based path comparisons.
+
 ## 6) Why MountManager Is Instrumented
 
 `MountManager` is an actor. Actor safety alone does not prove there is no practical bottleneck.
@@ -153,6 +157,7 @@ Config store:
 
 Secrets:
 - Keychain only (`com.visualweb.macfusegui.password`)
+- `KeychainService.readPassword` trims leading/trailing whitespace before returning and returns `nil` for whitespace-only values. This prevents silent SSH auth failures from clipboard-pasted trailing newlines without modifying what is stored in Keychain.
 
 Security rules:
 - no plaintext password persistence
@@ -180,3 +185,5 @@ scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme
 Purpose:
 - Ensures `MountManager` callsites explicitly forward `operationID`.
 - Runs test suite for concurrency, timeout, and recovery regressions.
+
+See `COMMIT_WORKFLOW.md` for commit message format and changelog rules before pushing.

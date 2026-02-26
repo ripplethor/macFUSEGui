@@ -13,6 +13,7 @@ Start here, in this order:
 1. `README.md` for build/run/test commands.
 2. `ARCHITECTURE.md` for system flow.
 3. `AGENTS.md` for safety contracts and invariants.
+4. `COMMIT_WORKFLOW.md` before committing (message format, changelog prefix rules).
 
 If your change touches connection logic, recovery, or browser sessions, read all three first.
 
@@ -43,6 +44,7 @@ Treat these as sensitive:
 - `RemotesViewModel` operation supervision logic
 - `MountManager` connect/disconnect/refresh behavior
 - `UnmountService` timeout and cleanup behavior
+- `KeychainService` password read/write behavior (trimming policy, cache coherence)
 - Browser session actors and request-ordering logic
 - App startup/quit lifecycle in `AppDelegate`
 
@@ -56,6 +58,9 @@ Do not break these rules:
 5. No password or secret logging.
 6. Preserve anti-flap refresh behavior.
 7. Preserve browser sticky-cache and empty-confirm behavior.
+8. Keep `KeychainService.readPassword` whitespace trimming — do not return the raw stored value.
+9. Keep `sshHostArgument()` wrapping in `MountCommandBuilder` and `MountManager` — do not interpolate `remote.host` directly into `user@host:path` strings.
+10. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect`.
 
 ## 6) Diagnostics for Bug Reports
 
