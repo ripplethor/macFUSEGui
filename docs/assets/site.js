@@ -1,5 +1,9 @@
 /* docs/assets/site.js */
-const REPO = "ripplethor/macfuseGUI";
+const CONFIG = {
+    repo: "ripplethor/macfuseGUI",
+    defaultBranch: "main",
+    repoApiBase: "https://api.github.com/repos"
+};
 const root = document.documentElement;
 
 const themeToggle = document.getElementById("theme-toggle");
@@ -86,8 +90,8 @@ function updateThemeUI() {
 }
 
 function setupLinks() {
-    const releasesUrl = `https://github.com/${REPO}/releases/latest`;
-    const repoUrl = `https://github.com/${REPO}`;
+    const releasesUrl = `https://github.com/${CONFIG.repo}/releases/latest`;
+    const repoUrl = `https://github.com/${CONFIG.repo}`;
 
     if (downloadBtn) {
         downloadBtn.href = releasesUrl;
@@ -98,6 +102,22 @@ function setupLinks() {
     if (footerGithubBtn) {
         footerGithubBtn.href = repoUrl;
     }
+}
+
+function addMediaQueryListener(mediaQueryList, handler) {
+    if (typeof mediaQueryList.addEventListener === "function") {
+        mediaQueryList.addEventListener("change", handler);
+        return;
+    }
+    if (typeof mediaQueryList.addListener === "function") {
+        mediaQueryList.addListener(handler);
+    }
+}
+
+function setupAdaptiveFxMode() {
+    const updateFxMode = () => applyFxMode(resolvePreferredFxMode());
+    addMediaQueryListener(prefersReducedMotion, updateFxMode);
+    addMediaQueryListener(prefersCoarsePointer, updateFxMode);
 }
 
 function setYear() {
@@ -172,13 +192,43 @@ function setupAccordion() {
     });
 }
 
+async function updateHeroVersion() {
+    const heroVersion = document.getElementById("hero-version");
+    if (!heroVersion) return;
+
+    const fallback = heroVersion.textContent?.trim() || "latest";
+    const url = `${CONFIG.repoApiBase}/${CONFIG.repo}/releases/latest`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                "Accept": "application/vnd.github+json"
+            }
+        });
+        if (!response.ok) {
+            throw new Error(`GitHub releases request failed: ${response.status}`);
+        }
+        const release = await response.json();
+        const tagName = typeof release.tag_name === "string" ? release.tag_name.trim() : "";
+        if (!tagName) {
+            heroVersion.textContent = fallback;
+            return;
+        }
+        heroVersion.textContent = tagName.startsWith("v") ? tagName : `v${tagName}`;
+    } catch (error) {
+        heroVersion.textContent = fallback;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     initFxMode();
     initTheme();
     setupLinks();
+    setupAdaptiveFxMode();
     setYear();
     setupVisibilityPerformance();
     setupAccordion();
+    void updateHeroVersion();
 
     if (themeToggle) {
         themeToggle.addEventListener("click", toggleTheme);

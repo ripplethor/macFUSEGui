@@ -7,7 +7,8 @@ This directory contains the static assets for the `macfuseGui` marketing website
 - `site.css`: Custom styles for glassmorphism, gradients, and specific visual tweaks that extend Tailwind.
 - `site.js`: Logic for:
   - Theme toggling (Dark/Light) with `localStorage` persistence.
-  - Dynamic GitHub repo links (configured via `const REPO`).
+  - Dynamic GitHub repo links (configured via `CONFIG.repo`).
+  - Hero release version hydration from the GitHub Releases API (with fallback text).
   - FAQ accordion behavior (ARIA-compliant).
   - Copyright year auto-update.
 - `hero-bg.webp`: Local hero background image (Unsplash source, converted to WebP for performance).
@@ -18,7 +19,9 @@ This directory contains the static assets for the `macfuseGui` marketing website
 To change the target repository for download/GitHub links, edit `site.js`:
 
 ```javascript
-const REPO = "ripplethor/macfuseGUI";
+const CONFIG = {
+  repo: "ripplethor/macfuseGUI"
+};
 ```
 
 ## Theme System
@@ -29,7 +32,9 @@ State is toggled via the button with `id="theme-toggle"`.
 ## Development
 
 The site is built with Tailwind CSS v4 via CDN for simplicity and no-build deployment.
-All paths must be **relative** (e.g., `assets/site.css`, not `/assets/site.css`) to ensure compatibility with GitHub Pages subdirectory hosting (`/macfuseGui/`).
+All asset paths must stay **relative** (e.g., `assets/site.css`, not `/assets/site.css`) so the site works in both:
+- custom-domain root hosting (current production: `https://www.macfusegui.app/`)
+- GitHub Pages subdirectory previews (for example `/macfuseGui/`)
 
 ## Deployment
 

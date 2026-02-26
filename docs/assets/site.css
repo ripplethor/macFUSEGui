@@ -631,6 +631,7 @@ html.tab-hidden .shooting-stars {
     display: grid;
     grid-template-rows: 0fr;
     opacity: 0;
+    transition: grid-template-rows 300ms ease, opacity 300ms ease;
 }
 
 .faq-panel.is-open {
@@ -742,66 +743,25 @@ html.tab-hidden .shooting-stars {
     }
 }
 
-/* Motion policy: keep background space field animations only */
-html {
-    scroll-behavior: auto !important;
-}
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
 
-.space-dust {
-    animation: dust-drift 95s linear infinite !important;
-}
+    .space-dust,
+    .nebula-cloud,
+    .starfield,
+    .shooting-star {
+        animation: none !important;
+        transform: none !important;
+    }
 
-.nebula-cloud-a {
-    animation: nebula-drift-a 42s ease-in-out infinite alternate !important;
-}
+    .shooting-stars,
+    .shooting-stars-reverse {
+        display: none;
+    }
 
-.nebula-cloud-b {
-    animation: nebula-drift-b 52s ease-in-out infinite alternate !important;
-}
-
-.nebula-cloud-c {
-    animation: nebula-drift-c 60s ease-in-out infinite alternate !important;
-}
-
-.nebula-cloud-d {
-    animation: nebula-drift-d 68s ease-in-out infinite alternate !important;
-}
-
-.starfield-far {
-    animation: star-drift-far 220s linear infinite !important;
-}
-
-.starfield-mid {
-    animation: star-drift-mid 165s linear infinite, twinkle-mid 9s ease-in-out infinite !important;
-}
-
-.starfield-near {
-    animation: star-drift-near 132s linear infinite, twinkle-near 7.8s ease-in-out infinite !important;
-}
-
-.star-glints {
-    animation: twinkle-glints 6.6s ease-in-out infinite alternate !important;
-    filter: none !important;
-}
-
-.shooting-star {
-    animation: shooting-star 14s ease-in-out infinite !important;
-}
-
-.shooting-star:nth-child(2) {
-    animation-delay: 4.5s !important;
-    animation-duration: 21s !important;
-}
-
-.shooting-star:nth-child(3) {
-    animation-delay: 8.2s !important;
-    animation-duration: 32s !important;
-}
-
-.shooting-star.reverse {
-    animation-name: shooting-star-left-to-right !important;
-    animation-delay: 1.6s !important;
-    animation-duration: 14s !important;
-    animation-iteration-count: infinite !important;
-    animation-timing-function: ease-in-out !important;
+    .faq-panel {
+        transition: none;
+    }
 }

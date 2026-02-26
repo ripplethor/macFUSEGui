@@ -7,7 +7,7 @@
     <title>macFUSEGui - Elegant SSHFS Management for macOS</title>
     <meta name="description"
         content="A premium, native-feeling macOS menu bar app for managing SSHFS mounts. Secure, reliable, with separate Apple Silicon and Intel builds.">
-    <link rel="canonical" href="https://www.macFUSEgui.app/">
+    <link rel="canonical" href="https://www.macfusegui.app/">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#123677">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#071330">
     <!-- Performance -->
@@ -22,105 +22,116 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://www.macFUSEgui.app/">
+    <meta property="og:url" content="https://www.macfusegui.app/">
     <meta property="og:title" content="macFUSEGui - Elegant SSHFS for macOS">
     <meta property="og:description"
         content="Secure, reliable remote filesystem mounting. Separate Apple Silicon and Intel builds. Manage multiple connections with a native menu bar experience.">
-    <meta property="og:image" content="https://www.macFUSEgui.app/assets/og-image.webp">
+    <meta property="og:image" content="https://www.macfusegui.app/assets/og-image.webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:type" content="image/webp">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://www.macFUSEgui.app/">
+    <meta property="twitter:url" content="https://www.macfusegui.app/">
     <meta property="twitter:title" content="macFUSEGui - Elegant SSHFS for macOS">
     <meta property="twitter:description"
         content="Secure, reliable remote filesystem mounting. Separate Apple Silicon and Intel builds.">
-    <meta property="twitter:image" content="https://www.macFUSEgui.app/assets/og-image.webp">
+    <meta property="twitter:image" content="https://www.macfusegui.app/assets/og-image.webp">
     <meta property="twitter:image:alt" content="macFUSEGui app icon and tagline on a dark nebula background">
 
     <!-- Structured Data -->
     <script type="application/ld+json">
- {
- "@context": "https://schema.org",
- "@type": "SoftwareApplication",
- "name": "macFUSEGui",
- "operatingSystem": "macOS",
- "applicationCategory": "UtilitiesApplication",
- "sameAs": [
- "https://github.com/ripplethor/macFUSEGUI"
- ],
- "downloadUrl": "https://github.com/ripplethor/macFUSEGUI/releases/latest",
- "offers": {
- "@type": "Offer",
- "price": "0",
- "priceCurrency": "USD"
- },
- "description": "A native macOS menu bar app for managing SSHFS mounts with macFUSE and sshfs."
- },
- {
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [{
- "@type": "Question",
- "name": "Do I need to install macFUSE and sshfs?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Yes. macFUSEGui is the control plane and UX layer. It relies on macFUSE and sshfs for the actual mount transport."
- }
- }, {
- "@type": "Question",
- "name": "How does authentication work?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Per remote, you can use password auth or private-key auth. Passwords are stored securely in the macOS Keychain, while remotes.json keeps only non-secret configuration fields."
- }
- }, {
- "@type": "Question",
- "name": "Can it manage multiple remotes at once?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Yes. Each remote has independent state and controls, so you can connect, disconnect, and monitor mounts without blocking other active remotes."
- }
- }, {
- "@type": "Question",
- "name": "What happens after sleep/wake or network drops?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "The app includes intelligent recovery passes for sleep/wake cycle changes, network restoration, and external unmount events. Desired remotes are automatically reconnected with controlled retry behavior."
- }
- }, {
- "@type": "Question",
- "name": "Can I choose local mount folders?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Yes. Every remote can manually mount to a user-selected local path. The application also enforces mount path uniqueness to actively prevent collisions."
- }
- }, {
- "@type": "Question",
- "name": "Is there built-in diagnostics?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Yes. You can copy a diagnostics snapshot that aggregates environment checks, remote states, active operations, and comprehensive recent logs to speed up troubleshooting."
- }
- }, {
- "@type": "Question",
- "name": "Why does macOS warn on first launch?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Current public builds are unsigned and not notarized. You must open once via Finder right-click Open, or deliberately approve it in System Settings → Privacy & Security."
- }
- }, {
- "@type": "Question",
- "name": "Can I open mounted paths directly in code editors?",
- "acceptedAnswer": {
- "@type": "Answer",
- "text": "Yes. Once successfully connected, mounted folders can be instantly opened in your preferred connected code editor via the app's robust Open-In editor plugin system."
- }
- }]
- }
- </script>
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "macFUSEGui",
+    "operatingSystem": "macOS",
+    "applicationCategory": "UtilitiesApplication",
+    "sameAs": [
+      "https://github.com/ripplethor/macfuseGUI"
+    ],
+    "downloadUrl": "https://github.com/ripplethor/macfuseGUI/releases/latest",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "description": "A native macOS menu bar app for managing SSHFS mounts with macFUSE and sshfs."
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Do I need to install macFUSE and sshfs?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. macFUSEGui is the control plane and UX layer. It relies on macFUSE and sshfs for the actual mount transport."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does authentication work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Per remote, you can use password auth or private-key auth. Passwords are stored securely in the macOS Keychain, while remotes.json keeps only non-secret configuration fields."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can it manage multiple remotes at once?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Each remote has independent state and controls, so you can connect, disconnect, and monitor mounts without blocking other active remotes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What happens after sleep/wake or network drops?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The app includes intelligent recovery passes for sleep/wake cycle changes, network restoration, and external unmount events. Desired remotes are automatically reconnected with controlled retry behavior."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I choose local mount folders?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Every remote can manually mount to a user-selected local path. The application also enforces mount path uniqueness to actively prevent collisions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is there built-in diagnostics?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. You can copy a diagnostics snapshot that aggregates environment checks, remote states, active operations, and comprehensive recent logs to speed up troubleshooting."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why does macOS warn on first launch?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Current public builds are unsigned and not notarized. You must open once via Finder right-click Open, or deliberately approve it in System Settings → Privacy & Security."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I open mounted paths directly in code editors?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Once successfully connected, mounted folders can be instantly opened in your preferred connected code editor via the app's robust Open-In editor plugin system."
+        }
+      }
+    ]
+  }
+]
+    </script>
 
     <!-- Inline Theme Script (Prevent Flash) -->
     <script>
@@ -148,6 +159,14 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="assets/site.css?v=20260220-775">
+    <noscript>
+        <style>
+            .faq-panel {
+                grid-template-rows: 1fr;
+                opacity: 1;
+            }
+        </style>
+    </noscript>
 
     <!-- Site Logic -->
     <script src="assets/site.js?v=20260220-63" defer></script>
@@ -253,7 +272,7 @@
                     </p>
 
                     <div class="mt-10 flex justify-center gap-4 mb-20">
-                        <a id="download-btn" href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                        <a id="download-btn" href="https://github.com/ripplethor/macfuseGUI/releases/latest"
                             class="px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] flex items-center">
                             <svg aria-hidden="true" focusable="false"
                                 class="w-6 h-6 mr-2 stroke-[1.2px]" fill="none"
@@ -265,7 +284,7 @@
                                 Download DMG
                             </span>
                         </a>
-                        <a id="github-btn" href="https://github.com/ripplethor/macFUSEGUI"
+                        <a id="github-btn" href="https://github.com/ripplethor/macfuseGUI"
                             class="px-8 py-4 rounded-full glass-panel text-gray-900 dark:text-white font-semibold text-lg hover:bg-white/40 dark:hover:bg-gray-800/60 flex items-center border border-gray-200 dark:border-white/10">
                             <svg aria-hidden="true" focusable="false" class="w-5 h-5 mr-2" fill="currentColor"
                                 viewBox="0 0 24 24">
@@ -330,7 +349,7 @@
                                     class="bg-[#252526] px-4 py-3 border-b border-black/20 flex justify-between items-center">
                                     <div class="text-white font-bold text-sm tracking-tight flex items-center"><span
                                             class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>macFUSEGui</div>
-                                    <div class="text-[10px] text-gray-500 font-mono">v2.1.0</div>
+                                    <div id="hero-version" class="text-[10px] text-gray-500 font-mono">latest</div>
                                 </div>
                                 <!-- App List -->
                                 <div class="p-3 space-y-3">
@@ -745,7 +764,7 @@
                             <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
                                 Download the DMG for your CPU architecture and drag the app to Applications.
                             </p>
-                            <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                            <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
                                 class="inline-flex items-center justify-center w-full px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold">
                                 Open Latest Release
                             </a>
@@ -769,10 +788,10 @@
                             launch, macOS will show a warning and you will need to allow it to run via System
                             Settings.
                             The source code is on
-                            <a href="https://github.com/ripplethor/macFUSEGUI"
+                            <a href="https://github.com/ripplethor/macfuseGUI"
                                 class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">GitHub</a>
                             and release artifacts are on
-                            <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                            <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
                                 class="underline underline-offset-4 decoration-amber-500/60 hover:decoration-amber-500">Releases</a>.
                         </p>
                     </div>
@@ -815,18 +834,18 @@ brew install gromgit/fuse/sshfs-mac</code></pre>
                             <code class="font-mono text-sm">-macos-x86_64.dmg</code>.
                         </p>
                         <div class="mt-6 flex flex-col sm:flex-row gap-3">
-                            <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                            <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
                                 class="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-[0_0_18px_rgba(37,99,235,0.35)] text-center">
                                 Apple Silicon (arm64)
                             </a>
-                            <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
+                            <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
                                 class="px-5 py-3 rounded-2xl glass-panel text-gray-900 dark:text-white font-semibold hover:bg-white/40 dark:hover:bg-gray-800/60 text-center border border-gray-200 dark:border-white/10">
                                 Intel (x86_64)
                             </a>
                         </div>
                         <p class="mt-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                            Release page: <a href="https://github.com/ripplethor/macFUSEGUI/releases/latest"
-                                class="underline underline-offset-4 decoration-blue-500/50 hover:decoration-blue-500">https://github.com/ripplethor/macFUSEGUI/releases/latest</a>
+                            Release page: <a href="https://github.com/ripplethor/macfuseGUI/releases/latest"
+                                class="underline underline-offset-4 decoration-blue-500/50 hover:decoration-blue-500">https://github.com/ripplethor/macfuseGUI/releases/latest</a>
                         </p>
                     </div>
                 </div>
@@ -1133,7 +1152,7 @@ brew install gromgit/fuse/sshfs-mac</code></pre>
                 </p>
             </div>
             <div class="flex space-x-8">
-                <a id="footer-github-btn" href="https://github.com/ripplethor/macFUSEGUI"
+                <a id="footer-github-btn" href="https://github.com/ripplethor/macfuseGUI"
                     class="text-gray-400 dark:text-white/50 hover:text-blue-600 dark:hover:text-blue-400 transform">
                     <span class="sr-only">GitHub</span>
                     <svg aria-hidden="true" focusable="false" class="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
