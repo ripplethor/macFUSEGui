@@ -472,6 +472,16 @@ html.tab-hidden .shooting-stars {
     animation-name: shooting-star-left-to-right;
 }
 
+.shooting-stars-reverse .shooting-star.reverse:nth-child(2) {
+    top: 68%;
+    animation-delay: 19s;
+    animation-duration: 27s;
+    width: 160px;
+    height: 1.5px;
+    background: linear-gradient(90deg, rgba(67, 56, 202, 0), rgba(56, 189, 248, 1) 80%, rgba(255, 255, 255, 1) 100%);
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8));
+}
+
 @keyframes nebula-drift-a {
     0% {
         transform: translate(-3%, -2%) scale(1.02);
@@ -624,6 +634,20 @@ html.tab-hidden .shooting-stars {
 .hero-stage {
     transform-style: preserve-3d;
     will-change: transform;
+}
+
+/* Feature Card Hover */
+#features .glass-panel {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#features .glass-panel:hover {
+    transform: scale(1.025);
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15);
+}
+
+.dark #features .glass-panel:hover {
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.25);
 }
 
 /* FAQ Accordion Animations */
