@@ -459,8 +459,7 @@ final class UnmountService {
         }
 
         let dataLine = lines.last ?? ""
-        let fields = dataLine.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        guard let mountedField = fields.last else {
+        guard let normalizedMountedField = normalizedDFMountedPath(from: dataLine) else {
             // Conservative fallback: assume still mounted if we cannot confirm otherwise.
             diagnostics.append(
                 level: .warning,
@@ -470,13 +469,27 @@ final class UnmountService {
             return true
         }
 
-        let normalizedMountedField = URL(fileURLWithPath: mountedField).standardizedFileURL.path
         return normalizedMountedField == mountPoint
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalizePath(_ path: String) -> String {
         URL(fileURLWithPath: path).standardizedFileURL.path
+    }
+
+    private func normalizedDFMountedPath(from line: String) -> String? {
+        let fields = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard fields.count >= 6 else {
+            return nil
+        }
+
+        let mountedField = fields.dropFirst(5).joined(separator: " ")
+        let decodedMountedField = decodeDFEscapedPath(mountedField)
+        return URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
+    }
+
+    private func decodeDFEscapedPath(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\040", with: " ")
     }
 
     /// Beginner note: This method clamps per-command timeouts to the remaining

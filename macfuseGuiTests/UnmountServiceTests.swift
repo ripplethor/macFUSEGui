@@ -45,6 +45,23 @@ final class UnmountServiceTests: XCTestCase {
         XCTAssertEqual(blockers[1], UnmountBlockingProcess(command: "code", pid: 654, path: "/Users/philip/MACFUSE-REMOTES/SouthAfrica/app.js"))
     }
 
+    /// Beginner note: df fallback parsing must preserve mount points containing spaces.
+    /// This verifies unmount is attempted instead of being skipped as "already unmounted."
+    func testUnmountUsesDFFallbackForMountPointWithSpaces() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/space mount"
+        let runner = FakeDFFallbackUnmountRunner(mountedPoints: [mountPoint])
+        let service = UnmountService(
+            runner: runner,
+            diagnostics: DiagnosticsService(),
+            mountStateParser: MountStateParser()
+        )
+
+        try await service.unmount(mountPoint: mountPoint)
+
+        let didAttemptUnmount = await runner.didAttemptUnmount(for: mountPoint)
+        XCTAssertTrue(didAttemptUnmount)
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func makeService() -> UnmountService {
         UnmountService(
@@ -52,5 +69,93 @@ final class UnmountServiceTests: XCTestCase {
             diagnostics: DiagnosticsService(),
             mountStateParser: MountStateParser()
         )
+    }
+}
+
+private actor FakeDFFallbackUnmountRunner: ProcessRunning {
+    private var mountedPoints: Set<String>
+    private var unmountAttempts: Set<String> = []
+
+    init(mountedPoints: Set<String>) {
+        self.mountedPoints = mountedPoints
+    }
+
+    func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        timeout: TimeInterval,
+        standardInput: String?
+    ) async throws -> ProcessResult {
+        let start = Date()
+
+        if executable == "/sbin/mount" {
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: "",
+                stderr: "mount command unavailable",
+                exitCode: 1,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        if executable == "/bin/df", let mountPoint = arguments.last {
+            let isMounted = mountedPoints.contains(mountPoint)
+            let mountedField: String
+            if isMounted {
+                mountedField = escapeDFPath(mountPoint)
+            } else {
+                mountedField = escapeDFPath(URL(fileURLWithPath: mountPoint).deletingLastPathComponent().path)
+            }
+            let stdout = """
+            Filesystem 512-blocks Used Available Capacity Mounted on
+            mock@host:/remote 1024 128 896 13% \(mountedField)
+            """
+
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: stdout,
+                stderr: "",
+                exitCode: 0,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        if (executable == "/usr/sbin/diskutil" || executable == "/sbin/umount"),
+           let mountPoint = arguments.last {
+            unmountAttempts.insert(mountPoint)
+            mountedPoints.remove(mountPoint)
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: "",
+                stderr: "",
+                exitCode: 0,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        return ProcessResult(
+            executable: executable,
+            arguments: arguments,
+            stdout: "",
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+            duration: Date().timeIntervalSince(start)
+        )
+    }
+
+    func didAttemptUnmount(for mountPoint: String) -> Bool {
+        unmountAttempts.contains(mountPoint)
+    }
+
+    private func escapeDFPath(_ path: String) -> String {
+        path.replacingOccurrences(of: " ", with: "\\040")
     }
 }

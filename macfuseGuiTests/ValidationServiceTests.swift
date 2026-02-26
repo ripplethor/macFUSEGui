@@ -97,6 +97,45 @@ final class ValidationServiceTests: XCTestCase {
         XCTAssertTrue(errors.contains("Host/IP contains invalid control characters."))
     }
 
+    /// Beginner note: IPv6 literals must be bracketed because mount command building
+    /// uses user@host:path and unbracketed IPv6 is ambiguous.
+    func testValidationRejectsBareIPv6HostLiteral() {
+        let draft = RemoteDraft(
+            displayName: "IPv6 Host",
+            host: "2001:db8::1",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "/home/dev",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.contains("IPv6 addresses must be wrapped in brackets, for example [::1]."))
+    }
+
+    /// Beginner note: Bracketed IPv6 hosts are accepted by validation.
+    func testValidationAllowsBracketedIPv6HostLiteral() {
+        let draft = RemoteDraft(
+            displayName: "IPv6 Host",
+            host: "[2001:db8::1]",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "/home/dev",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.isEmpty)
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     func testValidationRejectsUnsupportedTildeRemotePathVariants() {
         let draft = RemoteDraft(

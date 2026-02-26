@@ -212,6 +212,23 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 6.0, "Mount inspection should be bounded by hard timeouts.")
     }
 
+    /// Beginner note: df fallback parsing must preserve mount points containing spaces.
+    func testRefreshStatusUsesDFFallbackForMountPointWithSpaces() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/space mount"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            mountInspectionDelay: 3.2
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "DF Spaces", mountPoint: mountPoint)
+
+        let status = await manager.refreshStatus(remote: remote)
+
+        XCTAssertEqual(status.state, .connected, "df fallback should parse mount points with spaces.")
+        XCTAssertEqual(status.mountedPath, mountPoint)
+    }
+
     /// Beginner note: This method proves that a cancelled stale connect does not wedge future reconnect attempts.
     /// This is async and throwing: callers must await it and handle failures.
     func testCancelledStaleConnectAllowsFreshReconnect() async throws {
@@ -547,7 +564,7 @@ private actor FakeMountRunner: ProcessRunning {
             if isMounted {
                 stdout = """
                 Filesystem 512-blocks Used Available Capacity Mounted on
-                mock@host:/remote 1024 128 896 13% \(mountPoint)
+                mock@host:/remote 1024 128 896 13% \(escapeDFPath(mountPoint))
                 """
             } else {
                 stdout = ""
@@ -616,5 +633,9 @@ private actor FakeMountRunner: ProcessRunning {
             timedOut: false,
             duration: Date().timeIntervalSince(startedAt)
         )
+    }
+
+    private func escapeDFPath(_ path: String) -> String {
+        path.replacingOccurrences(of: " ", with: "\\040")
     }
 }

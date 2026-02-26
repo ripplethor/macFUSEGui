@@ -38,9 +38,10 @@ final class ValidationService {
         } else {
             if containsUnsafeControlCharacters(host) {
                 errors.append("Host/IP contains invalid control characters.")
+            } else if isBareIPv6HostLiteral(host) {
+                errors.append("IPv6 addresses must be wrapped in brackets, for example [::1].")
             } else if !isSupportedHost(host) {
-                // Host syntax is intentionally permissive here (for example IPv6-like forms).
-                // Exact address validity is enforced by downstream connect calls.
+                // Host syntax allows standard DNS-like names and bracketed IPv6 literals.
                 errors.append("Host/IP contains unsupported characters.")
             }
         }
@@ -129,8 +130,11 @@ final class ValidationService {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func isSupportedHost(_ value: String) -> Bool {
-        let allowedScalars = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-")
-        return value.unicodeScalars.allSatisfy { allowedScalars.contains($0) }
+        value.range(of: #"^(?:\[[A-Fa-f0-9:.]+\]|[A-Za-z0-9._-]+)$"#, options: .regularExpression) != nil
+    }
+
+    private func isBareIPv6HostLiteral(_ value: String) -> Bool {
+        value.contains(":") && !(value.hasPrefix("[") && value.hasSuffix("]"))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

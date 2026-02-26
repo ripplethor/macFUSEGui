@@ -35,6 +35,8 @@ final class EditorPluginRegistry: ObservableObject {
     private let exampleTemplateFileName = "custom-editor.json.template"
     private let bundledBuiltInPluginsFolderName = "EditorPlugins"
     private let bundledPluginManifestFileName = "plugin.json"
+    private var usedFallbackAppSupportDirectory = false
+    private var didPublishAppSupportFallbackIssue = false
 
     private func normalizedPluginID(_ id: String) -> String {
         id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -52,7 +54,13 @@ final class EditorPluginRegistry: ObservableObject {
         if let appSupportDirectoryURL {
             self.appSupportDirectoryURL = appSupportDirectoryURL
         } else {
-            self.appSupportDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            if let resolvedAppSupportDirectoryURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                self.appSupportDirectoryURL = resolvedAppSupportDirectoryURL
+            } else {
+                self.appSupportDirectoryURL = fileManager.temporaryDirectory
+                    .appendingPathComponent("com.visualweb.macfusegui", isDirectory: true)
+                self.usedFallbackAppSupportDirectory = true
+            }
         }
 
         reloadCatalog()
@@ -61,6 +69,15 @@ final class EditorPluginRegistry: ObservableObject {
     /// Beginner note: This method is one step in the feature workflow for this file.
     func reloadCatalog() {
         var issues: [EditorPluginLoadIssue] = []
+        if usedFallbackAppSupportDirectory && !didPublishAppSupportFallbackIssue {
+            issues.append(
+                EditorPluginLoadIssue(
+                    file: appSupportDirectoryURL.path,
+                    reason: "Application Support directory lookup returned no user-domain path. Using fallback: \(appSupportDirectoryURL.path)"
+                )
+            )
+            didPublishAppSupportFallbackIssue = true
+        }
         let builtIns = builtInCatalog(issues: &issues)
         preparePluginsDirectoryScaffold(builtIns: builtIns, issues: &issues)
         var mergedByID: [String: EditorPluginDefinition] = Dictionary(

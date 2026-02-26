@@ -1247,21 +1247,30 @@ actor MountManager {
         }
 
         let dataLine = lines.last ?? ""
-        let fields = dataLine.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard let (source, mountedOn) = parsedDFLine(dataLine) else {
+            return nil
+        }
+        guard mountedOn == mountPoint else {
+            return nil
+        }
+        return MountRecord(source: source, mountPoint: mountedOn, filesystemType: "unknown")
+    }
+
+    private func parsedDFLine(_ line: String) -> (source: String, mountedOn: String)? {
+        let fields = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         guard fields.count >= 6 else {
             return nil
         }
 
-        guard let mountedField = fields.last else {
-            return nil
-        }
-        let mountedOn = URL(fileURLWithPath: mountedField).standardizedFileURL.path
-        guard mountedOn == mountPoint else {
-            return nil
-        }
-
         let source = fields[0]
-        return MountRecord(source: source, mountPoint: mountedOn, filesystemType: "unknown")
+        let mountedField = fields.dropFirst(5).joined(separator: " ")
+        let decodedMountedField = decodeDFEscapedPath(mountedField)
+        let mountedOn = URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
+        return (source, mountedOn)
+    }
+
+    private func decodeDFEscapedPath(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\040", with: " ")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

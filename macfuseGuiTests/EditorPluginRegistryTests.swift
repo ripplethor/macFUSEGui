@@ -411,6 +411,35 @@ final class EditorPluginRegistryTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: externalPath.path))
     }
 
+    /// Beginner note: This method ensures registry does not crash when Application Support
+    /// lookup fails and surfaces a warning in load issues.
+    func testApplicationSupportFallbackAddsLoadIssueWarning() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("macfusegui-editor-registry-fallback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: tempRoot)
+        }
+
+        let suiteName = "com.visualweb.macfusegui.tests.editor-registry-fallback-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let fileManager = MissingAppSupportFileManager(fallbackTemporaryDirectoryURL: tempRoot)
+        let registry = EditorPluginRegistry(
+            fileManager: fileManager,
+            userDefaults: defaults
+        )
+
+        XCTAssertTrue(registry.loadIssues.contains(where: {
+            $0.reason.contains("Application Support directory lookup returned no user-domain path.")
+        }))
+        XCTAssertTrue(registry.pluginsDirectoryPath.contains("com.visualweb.macfusegui"))
+    }
+
     /// Beginner note: This helper centralizes temporary context setup for registry tests.
     private func makeContext() throws -> (appSupportDirectory: URL, defaults: UserDefaults) {
         let tempRoot = FileManager.default.temporaryDirectory
@@ -437,5 +466,25 @@ final class EditorPluginRegistryTests: XCTestCase {
             .appendingPathComponent("editor-plugins", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+private final class MissingAppSupportFileManager: FileManager {
+    private let fallbackTemporaryDirectoryURL: URL
+
+    init(fallbackTemporaryDirectoryURL: URL) {
+        self.fallbackTemporaryDirectoryURL = fallbackTemporaryDirectoryURL
+        super.init()
+    }
+
+    override var temporaryDirectory: URL {
+        fallbackTemporaryDirectoryURL
+    }
+
+    override func urls(for directory: SearchPathDirectory, in domainMask: SearchPathDomainMask) -> [URL] {
+        if directory == .applicationSupportDirectory, domainMask == .userDomainMask {
+            return []
+        }
+        return super.urls(for: directory, in: domainMask)
     }
 }
