@@ -2109,9 +2109,14 @@ final class RemotesViewModel: ObservableObject {
                 return
             }
             defer {
-                reconnectTasks.removeValue(forKey: remoteID)
-                reconnectInFlight.remove(remoteID)
-                refreshRecoveryIndicator()
+                // Skip cleanup if this task was cancelled: a replacement task was already
+                // stored in reconnectTasks and reconnectInFlight. Clearing those entries
+                // here would clobber the replacement's bookkeeping.
+                if !Task.isCancelled {
+                    reconnectTasks.removeValue(forKey: remoteID)
+                    reconnectInFlight.remove(remoteID)
+                    refreshRecoveryIndicator()
+                }
             }
 
             if delaySeconds > 0 {
@@ -2254,8 +2259,13 @@ final class RemotesViewModel: ObservableObject {
                 return
             }
             defer {
-                recoveryBurstTask = nil
-                refreshRecoveryIndicator()
+                // Skip cleanup if this task was cancelled: a replacement burst task was
+                // already assigned to recoveryBurstTask. Clearing it here would clobber
+                // the replacement's reference, preventing future cancellation.
+                if !Task.isCancelled {
+                    recoveryBurstTask = nil
+                    refreshRecoveryIndicator()
+                }
             }
 
             for (index, delay) in delaySeconds.enumerated() {
