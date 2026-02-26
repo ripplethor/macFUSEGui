@@ -1083,6 +1083,7 @@ actor MountManager {
 
             // After sshfs exits successfully, the mount should show up quickly.
             // Keeping this short prevents "phantom hangs" when the system is unstable.
+            let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
             let detectionDeadline = Date().addingTimeInterval(5)
             while Date() < detectionDeadline {
                 if Task.isCancelled {
@@ -1091,7 +1092,7 @@ actor MountManager {
 
                 do {
                     if let record = try await currentMountRecord(
-                        for: remote.localMountPoint,
+                        for: normalizedMountPoint,
                         remoteID: remote.id,
                         operationID: operationID
                     ) {
@@ -1103,6 +1104,31 @@ actor MountManager {
                         )
                         if updateStoredStatus {
                             // Skip status cache updates in "test connection" mode.
+                            updateCachedStatus(status, for: remote.id)
+                        }
+                        return status
+                    }
+
+                    // Some mount output variants can be syntactically valid but not match our
+                    // parser shape. Use df fallback during connect detection to avoid false
+                    // negatives when sshfs has already established the mount.
+                    if let fallback = try await currentMountRecordViaDF(
+                        for: normalizedMountPoint,
+                        remoteID: remote.id,
+                        operationID: operationID
+                    ) {
+                        diagnostics.append(
+                            level: .warning,
+                            category: "mount",
+                            message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
+                        )
+                        let status = RemoteStatus(
+                            state: .connected,
+                            mountedPath: fallback.mountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        if updateStoredStatus {
                             updateCachedStatus(status, for: remote.id)
                         }
                         return status

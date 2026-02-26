@@ -274,6 +274,26 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 12.0, "Connect should remain bounded even when mount inspection initially times out.")
     }
 
+    /// Beginner note: If `/sbin/mount` output shape changes and parser misses the mount line,
+    /// connect should still succeed quickly by using df fallback during post-connect detection.
+    func testConnectUsesDFFallbackWhenMountOutputIsUnparseable() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/connect-df-fallback"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            forceUnparseableMountOutput: true
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Connect DF Fallback", mountPoint: mountPoint)
+
+        let startedAt = Date()
+        let status = await manager.connect(remote: remote, password: nil)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 2.0, "DF fallback should avoid long connect detection waits.")
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// It verifies we do not preserve "connected" forever when mount table checks keep missing.
     func testResponsivePathDoesNotPreserveConnectedForeverWithoutMountRecord() async throws {
@@ -533,6 +553,7 @@ private actor FakeMountRunner: ProcessRunning {
     private let connectDelayByMountPoint: [String: TimeInterval]
     private var connectDelayScheduleByMountPoint: [String: [TimeInterval]]
     private let mountInspectionDelay: TimeInterval
+    private let forceUnparseableMountOutput: Bool
 
     init(
         connectDelayByMountPoint: [String: TimeInterval],
@@ -540,7 +561,8 @@ private actor FakeMountRunner: ProcessRunning {
         mountInspectionDelay: TimeInterval = 0,
         alwaysResponsivePaths: Set<String> = [],
         unreadableMountedPaths: Set<String> = [],
-        timedOutDirectoryQueryPaths: Set<String> = []
+        timedOutDirectoryQueryPaths: Set<String> = [],
+        forceUnparseableMountOutput: Bool = false
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
         self.connectDelayScheduleByMountPoint = connectDelayScheduleByMountPoint
@@ -548,6 +570,7 @@ private actor FakeMountRunner: ProcessRunning {
         self.alwaysResponsivePaths = alwaysResponsivePaths
         self.unreadableMountedPaths = unreadableMountedPaths
         self.timedOutDirectoryQueryPaths = timedOutDirectoryQueryPaths
+        self.forceUnparseableMountOutput = forceUnparseableMountOutput
     }
 
     func simulateExternalUnmount(mountPoint: String) {
@@ -617,9 +640,16 @@ private actor FakeMountRunner: ProcessRunning {
             }
 
             let points = mountedPoints.sorted()
-            let output = points
-                .map { "mock@host:/remote on \($0) (fusefs, nodev, nosuid, synchronous)" }
-                .joined(separator: "\n")
+            let output: String
+            if forceUnparseableMountOutput {
+                output = points
+                    .map { "mock@host:/remote mounted at \($0) type fusefs" }
+                    .joined(separator: "\n")
+            } else {
+                output = points
+                    .map { "mock@host:/remote on \($0) (fusefs, nodev, nosuid, synchronous)" }
+                    .joined(separator: "\n")
+            }
 
             let timedOut = mountInspectionDelay > timeout
             return ProcessResult(
