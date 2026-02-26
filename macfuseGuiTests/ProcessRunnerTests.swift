@@ -284,7 +284,7 @@ final class MountManagerParallelOperationTests: XCTestCase {
     }
 
     /// Beginner note: A stale FUSE mount can pass metadata stat probes but fail directory queries.
-    /// Refresh should mark this as error so recovery can reconnect instead of showing false-connected.
+    /// Refresh should preserve connected briefly, then escalate to error for recovery.
     func testRefreshDetectsStaleMountWhenDirectoryQueryFails() async throws {
         let mountPoint = "/tmp/macfusegui-tests/stale-dir-query"
         let runner = FakeMountRunner(
@@ -298,9 +298,14 @@ final class MountManagerParallelOperationTests: XCTestCase {
         let connected = await manager.connect(remote: remote, password: nil)
         XCTAssertEqual(connected.state, .connected)
 
-        let refreshed = await manager.refreshStatus(remote: remote)
-        XCTAssertEqual(refreshed.state, .error)
-        XCTAssertTrue((refreshed.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+        let first = await manager.refreshStatus(remote: remote)
+        let second = await manager.refreshStatus(remote: remote)
+        let third = await manager.refreshStatus(remote: remote)
+
+        XCTAssertEqual(first.state, .connected)
+        XCTAssertEqual(second.state, .connected)
+        XCTAssertEqual(third.state, .error)
+        XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
     }
 
     /// Beginner note: One-off directory query timeouts can be transient on healthy network mounts.
@@ -343,6 +348,34 @@ final class MountManagerParallelOperationTests: XCTestCase {
 
         let manager = makeManager(runner: runner)
         let remote = makeRemote(name: "Startup Timeout Preserve", mountPoint: mountPoint)
+
+        // Explicit startup precondition: no cached status yet for this remote.
+        let initialStatus = await manager.status(for: remote.id)
+        XCTAssertEqual(initialStatus.state, .disconnected)
+
+        let first = await manager.refreshStatus(remote: remote)
+        let second = await manager.refreshStatus(remote: remote)
+        let third = await manager.refreshStatus(remote: remote)
+
+        XCTAssertEqual(first.state, .connected)
+        XCTAssertEqual(second.state, .connected)
+        XCTAssertEqual(third.state, .error)
+        XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+    }
+
+    /// Beginner note: Startup refresh should apply the same short grace window for
+    /// non-timeout directory query failures when mount table and metadata probes are healthy.
+    func testStartupRefreshPreservesConnectedWhenMountExistsAndDirectoryQueryFails() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/startup-failed-query-preserve"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            alwaysResponsivePaths: [mountPoint],
+            unreadableMountedPaths: [mountPoint]
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Startup Failed Query Preserve", mountPoint: mountPoint)
 
         // Explicit startup precondition: no cached status yet for this remote.
         let initialStatus = await manager.status(for: remote.id)

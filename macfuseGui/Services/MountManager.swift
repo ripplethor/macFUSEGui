@@ -22,7 +22,7 @@ actor MountManager {
     private enum DirectoryQueryHealth {
         case healthy
         case timedOut
-        case failed
+        case failed(reason: String)
     }
 
     private let runner: ProcessRunning
@@ -42,6 +42,9 @@ actor MountManager {
     private let maxConnectedPreserveMisses = 2
     // Treat one-off directory query timeouts as transient before forcing recovery.
     private let maxDirectoryQueryTimeoutPreserveMisses = 2
+    // Directory-query exit failures can also be transient around wake/network restore.
+    // Keep a short grace window before declaring stale and forcing reconnect.
+    private let maxDirectoryQueryFailurePreserveMisses = 2
     private let sshfsConnectCommandTimeout: TimeInterval
     private let forceStopProcessListTimeout: TimeInterval = 3
 
@@ -49,6 +52,7 @@ actor MountManager {
     private var statuses: [UUID: RemoteStatus] = [:]
     private var connectedPreserveMisses: [UUID: Int] = [:]
     private var directoryQueryTimeoutPreserveMisses: [UUID: Int] = [:]
+    private var directoryQueryFailurePreserveMisses: [UUID: Int] = [:]
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
@@ -107,6 +111,7 @@ actor MountManager {
             }
             if mountedRecord == nil {
                 directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                directoryQueryFailurePreserveMisses[remote.id] = 0
             }
 
             // Guard against single-pass probe misses: if we were connected, do a fast
@@ -189,6 +194,7 @@ actor MountManager {
                 }
                 guard metadataHealthy else {
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                    directoryQueryFailurePreserveMisses[remote.id] = 0
                     // Important: refreshStatus should stay lightweight.
                     // Do not run full unmount cleanup in this probe path, because that can
                     // take tens of seconds and block mount status refresh flow.
@@ -215,7 +221,9 @@ actor MountManager {
                 switch directoryHealth {
                 case .healthy:
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                    directoryQueryFailurePreserveMisses[remote.id] = 0
                 case .timedOut:
+                    directoryQueryFailurePreserveMisses[remote.id] = 0
                     let timeoutMissCount = (directoryQueryTimeoutPreserveMisses[remote.id] ?? 0) + 1
                     directoryQueryTimeoutPreserveMisses[remote.id] = timeoutMissCount
 
@@ -250,9 +258,34 @@ actor MountManager {
                     )
                     updateCachedStatus(staleStatus, for: remote.id)
                     return staleStatus
-                case .failed:
+                case .failed(let reason):
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
-                    diagnostics.append(level: .warning, category: "mount", message: "Stale mount detected at \(remote.localMountPoint). Marking as error for reconnect flow.")
+                    let failureMissCount = (directoryQueryFailurePreserveMisses[remote.id] ?? 0) + 1
+                    directoryQueryFailurePreserveMisses[remote.id] = failureMissCount
+
+                    // Preserve briefly when mount table and metadata probes are healthy.
+                    // This avoids immediate reconnect flapping from transient directory query exits.
+                    if failureMissCount <= maxDirectoryQueryFailurePreserveMisses {
+                        let preserved = RemoteStatus(
+                            state: .connected,
+                            mountedPath: mountedRecord.mountPoint,
+                            lastError: nil,
+                            updatedAt: Date()
+                        )
+                        updateCachedStatus(preserved, for: remote.id)
+                        diagnostics.append(
+                            level: .debug,
+                            category: "mount",
+                            message: "Preserved connected state for \(remote.displayName) after directory query failure (\(failureMissCount)/\(maxDirectoryQueryFailurePreserveMisses)): \(reason)"
+                        )
+                        return preserved
+                    }
+
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Stale mount detected at \(remote.localMountPoint) after repeated directory query failures (\(reason)). Marking as error for reconnect flow."
+                    )
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -275,6 +308,7 @@ actor MountManager {
 
             connectedPreserveMisses[remote.id] = 0
             directoryQueryTimeoutPreserveMisses[remote.id] = 0
+            directoryQueryFailurePreserveMisses[remote.id] = 0
             let disconnected = RemoteStatus(state: .disconnected, updatedAt: Date())
             updateCachedStatus(disconnected, for: remote.id)
             return disconnected
@@ -316,6 +350,7 @@ actor MountManager {
 
                     connectedPreserveMisses[remote.id] = 0
                     directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                    directoryQueryFailurePreserveMisses[remote.id] = 0
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -334,6 +369,7 @@ actor MountManager {
                 )
                 connectedPreserveMisses[remote.id] = 0
                 directoryQueryTimeoutPreserveMisses[remote.id] = 0
+                directoryQueryFailurePreserveMisses[remote.id] = 0
                 updateCachedStatus(disconnected, for: remote.id)
                 return disconnected
             }
@@ -1061,15 +1097,26 @@ actor MountManager {
                 timeout: mountDirectoryQueryTimeout
             )
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = !stderr.isEmpty ? stderr : stdout
+            let compactDetail = detail
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let detailSuffix = compactDetail.isEmpty ? "" : " detail=\(compactDetail)"
             diagnostics.append(
                 level: .debug,
                 category: "mount",
-                message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
+                message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)\(detailSuffix)"
             )
             if result.timedOut {
                 return .timedOut
             }
-            return result.exitCode == 0 ? .healthy : .failed
+            if result.exitCode == 0 {
+                return .healthy
+            }
+            let reason = compactDetail.isEmpty ? "exit \(result.exitCode)" : compactDetail
+            return .failed(reason: reason)
         } catch {
             let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
             diagnostics.append(
@@ -1077,7 +1124,7 @@ actor MountManager {
                 category: "mount",
                 message: "probe end op=mount-dir-query remoteID=\(remoteText) operationID=\(operationText) path=\(mountPoint) elapsedMs=\(elapsedMs) error=\(error.localizedDescription)"
             )
-            return .failed
+            return .failed(reason: error.localizedDescription)
         }
     }
 
@@ -1246,6 +1293,7 @@ actor MountManager {
     private func clearRefreshProbeMisses(for remoteID: UUID) {
         connectedPreserveMisses[remoteID] = 0
         directoryQueryTimeoutPreserveMisses[remoteID] = 0
+        directoryQueryFailurePreserveMisses[remoteID] = 0
     }
 
     private func logActorQueueDelay(op: String, remote: RemoteConfig, queuedAt: Date, operationID: UUID?) {
