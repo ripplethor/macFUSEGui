@@ -224,6 +224,7 @@ final class RemotesViewModel: ObservableObject {
     private var lastRecoveryRefreshAt: [UUID: Date] = [:]
     private var recoveryTimer: Timer?
     private var lastPeriodicRecoveryProbeAt: Date = .distantPast
+    private var lastReachabilityBypassRecoveryAt: Date = .distantPast
     private var lastSleepSkipLogAt: Date = .distantPast
     private var lastWakePreflightSkipLogAt: Date = .distantPast
     private var recoveryBurstTask: Task<Void, Never>?
@@ -235,6 +236,7 @@ final class RemotesViewModel: ObservableObject {
     private var startupAutoConnectInProgress = false
     private var startupAutoConnectRerunRequested = false
     private var networkRestoreDebounceTask: Task<Void, Never>?
+    private var networkLossCleanupTask: Task<Void, Never>?
     private var recoveryMonitoringStarted = false
     private var shutdownInProgress = false
     private var recoveryIndicatorReason: String?
@@ -246,6 +248,7 @@ final class RemotesViewModel: ObservableObject {
     private let healthyPeriodicProbeInterval: TimeInterval
     private let periodicRecoveryPassInterval: TimeInterval
     private let networkRestoredDebounceSeconds: TimeInterval = 1.5
+    private let networkLossCleanupDebounceSeconds: TimeInterval = 0.5
     private var operationWatchdogTasks: [UUID: Task<Void, Never>] = [:]
     // Hard timeout for actual connect operation body.
     private let connectTimeoutSeconds: TimeInterval = 35
@@ -314,6 +317,8 @@ final class RemotesViewModel: ObservableObject {
         recoveryBurstTask = nil
         networkRestoreDebounceTask?.cancel()
         networkRestoreDebounceTask = nil
+        networkLossCleanupTask?.cancel()
+        networkLossCleanupTask = nil
 
         let notificationCenter = NSWorkspace.shared.notificationCenter
         workspaceObservers.forEach { notificationCenter.removeObserver($0) }
@@ -1675,7 +1680,7 @@ final class RemotesViewModel: ObservableObject {
         }
 
         let scheduledReconnectCount = reconnectTasks.count + reconnectInFlight.count
-        let burstActive = recoveryBurstTask != nil
+        let burstActive = recoveryBurstTask != nil || networkLossCleanupTask != nil
         let normalizedReason = reason.lowercased()
         let isWakeOrNetworkRecovery = normalizedReason.contains("wake") || normalizedReason.contains("network-restored")
         let wakeWindowActive = (wakeAnimationUntil ?? .distantPast) > Date()
@@ -1701,6 +1706,8 @@ final class RemotesViewModel: ObservableObject {
         wakeAnimationUntil = nil
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
+        networkLossCleanupTask?.cancel()
+        networkLossCleanupTask = nil
         for remoteID in Array(remoteOperations.keys) {
             cancelOperation(
                 remoteID: remoteID,
@@ -1739,71 +1746,13 @@ final class RemotesViewModel: ObservableObject {
     /// Beginner note: Wake preflight clears stale sshfs state for desired remotes
     /// before staged reconnect passes. This prevents stale mounts from wedging Finder/UI.
     private func performWakePreflightCleanup() async {
-        guard !shutdownInProgress else {
-            return
-        }
-
         let targets = remotes.filter { desiredConnections.contains($0.id) }
-        guard !targets.isEmpty else {
-            return
-        }
-
-        let startedAt = Date()
-        diagnostics.append(
-            level: .info,
-            category: "recovery",
-            message: "Wake preflight cleanup for \(targets.count) desired remote(s) (parallel, fast force-unmount)."
-        )
-
-        // Cancel any in-flight per-remote operations before cleanup starts.
-        for remote in targets {
-            if remoteOperations[remote.id] != nil {
-                cancelOperation(
-                    remoteID: remote.id,
-                    reason: "wake-preflight",
-                    supersededBy: nil,
-                    removeFromTable: true
-                )
-            }
-        }
-
-        let mountManager = self.mountManager
-        var completedRemoteNames: [String] = []
-
-        await withTaskGroup(of: (UUID, String).self) { group in
-            for remote in targets {
-                let forceStopQueuedAt = Date()
-                logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
-
-                group.addTask {
-                    await mountManager.forceStopProcesses(
-                        for: remote,
-                        queuedAt: forceStopQueuedAt,
-                        operationID: nil,
-                        fastForceUnmount: true
-                    )
-                    return (remote.id, remote.displayName)
-                }
-            }
-
-            for await (remoteID, remoteName) in group {
-                completedRemoteNames.append(remoteName)
-                let disconnected = RemoteStatus(
-                    state: .disconnected,
-                    mountedPath: nil,
-                    lastError: "Re-establishing connection after wake.",
-                    updatedAt: Date()
-                )
-                observeStatus(disconnected, for: remoteID)
-            }
-        }
-
-        let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
-        let names = completedRemoteNames.sorted().joined(separator: ", ")
-        diagnostics.append(
-            level: .info,
-            category: "recovery",
-            message: "Wake preflight cleanup completed in \(elapsedMs)ms for: \(names)."
+        await performFastRecoveryCleanup(
+            targets: targets,
+            cancellationReason: "wake-preflight",
+            disconnectedMessage: "Re-establishing connection after wake.",
+            startMessage: "Wake preflight cleanup for \(targets.count) desired remote(s) (parallel, fast force-unmount).",
+            completionPrefix: "Wake preflight cleanup"
         )
     }
 
@@ -1871,6 +1820,9 @@ final class RemotesViewModel: ObservableObject {
 
         if transition == .becameReachable {
             networkRestoreDebounceTask?.cancel()
+            networkLossCleanupTask?.cancel()
+            networkLossCleanupTask = nil
+            lastReachabilityBypassRecoveryAt = .distantPast
             networkRestoreDebounceTask = Task { @MainActor [weak self] in
                 guard let self else {
                     return
@@ -1903,10 +1855,127 @@ final class RemotesViewModel: ObservableObject {
         } else {
             networkRestoreDebounceTask?.cancel()
             networkRestoreDebounceTask = nil
-            diagnostics.append(level: .warning, category: "recovery", message: "Network became unreachable. Waiting before reconnect attempts.")
+            networkLossCleanupTask?.cancel()
+            recoveryBurstTask?.cancel()
+            recoveryBurstTask = nil
+            diagnostics.append(level: .warning, category: "recovery", message: "Network became unreachable. Running fast cleanup and pausing reconnect attempts.")
             cancelAllScheduledReconnects(reason: "network-unreachable")
+            beginRecoveryIndicator(reason: "network-unreachable")
+            networkLossCleanupTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+                defer {
+                    if !Task.isCancelled {
+                        networkLossCleanupTask = nil
+                        refreshRecoveryIndicator()
+                    }
+                }
+                if self.networkLossCleanupDebounceSeconds > 0 {
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(self.networkLossCleanupDebounceSeconds * 1_000_000_000)
+                    )
+                }
+                guard !Task.isCancelled else {
+                    return
+                }
+                guard !self.networkReachable, !self.shutdownInProgress, !self.systemSleeping else {
+                    return
+                }
+                await self.performNetworkLossCleanup()
+            }
             refreshRecoveryIndicator()
         }
+    }
+
+    /// Beginner note: This fast cleanup path tears down dead network mounts before Finder/open panels touch them.
+    func performNetworkLossCleanup() async {
+        let targets = Self.connectivityLossCleanupTargets(
+            remotes: remotes,
+            statuses: statuses,
+            desiredConnections: desiredConnections
+        )
+        await performFastRecoveryCleanup(
+            targets: targets,
+            cancellationReason: "network-unreachable",
+            disconnectedMessage: "Network unavailable. Disconnected to avoid stale mount hangs. Will reconnect when network returns.",
+            startMessage: "Network loss cleanup for \(targets.count) desired remote(s) (parallel, fast force-unmount).",
+            completionPrefix: "Network loss cleanup"
+        )
+    }
+
+    /// Beginner note: Shared bounded cleanup used by wake/network recovery paths.
+    func performFastRecoveryCleanup(
+        targets: [RemoteConfig],
+        cancellationReason: String,
+        disconnectedMessage: String,
+        startMessage: String,
+        completionPrefix: String
+    ) async {
+        guard !shutdownInProgress else {
+            return
+        }
+        guard !targets.isEmpty else {
+            return
+        }
+
+        let startedAt = Date()
+        diagnostics.append(
+            level: .info,
+            category: "recovery",
+            message: startMessage
+        )
+
+        // Cancel any in-flight per-remote operations before cleanup starts.
+        for remote in targets {
+            if remoteOperations[remote.id] != nil {
+                cancelOperation(
+                    remoteID: remote.id,
+                    reason: cancellationReason,
+                    supersededBy: nil,
+                    removeFromTable: true
+                )
+            }
+        }
+
+        let mountManager = self.mountManager
+        var completedRemoteNames: [String] = []
+
+        await withTaskGroup(of: (UUID, String).self) { group in
+            for remote in targets {
+                let forceStopQueuedAt = Date()
+                logMountCall(op: "forceStopProcesses", remoteID: remote.id, operationID: nil, queuedAt: forceStopQueuedAt)
+
+                group.addTask {
+                    await mountManager.forceStopProcesses(
+                        for: remote,
+                        queuedAt: forceStopQueuedAt,
+                        operationID: nil,
+                        fastForceUnmount: true
+                    )
+                    return (remote.id, remote.displayName)
+                }
+            }
+
+            for await (remoteID, remoteName) in group {
+                completedRemoteNames.append(remoteName)
+                let disconnected = RemoteStatus(
+                    state: .disconnected,
+                    mountedPath: nil,
+                    lastError: disconnectedMessage,
+                    updatedAt: Date()
+                )
+                observeStatus(disconnected, for: remoteID)
+            }
+        }
+
+        let elapsedMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
+        let names = completedRemoteNames.sorted().joined(separator: ", ")
+        diagnostics.append(
+            level: .info,
+            category: "recovery",
+            message: "\(completionPrefix) completed in \(elapsedMs)ms for: \(names)."
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -1943,7 +2012,17 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
-        guard networkReachable else {
+        let allowingReachabilityBypass = shouldAllowPeriodicRecoveryDespiteReachabilityFalse(trigger: trigger)
+        if !networkReachable, allowingReachabilityBypass {
+            lastReachabilityBypassRecoveryAt = Date()
+            diagnostics.append(
+                level: .warning,
+                category: "recovery",
+                message: "Reachability still reports unavailable. Running periodic reconnect probe for desired remotes."
+            )
+        }
+
+        guard networkReachable || allowingReachabilityBypass else {
             return
         }
 
@@ -2046,7 +2125,11 @@ final class RemotesViewModel: ObservableObject {
                 continue
             }
 
-            scheduleAutoReconnect(for: remote.id, trigger: trigger)
+            scheduleAutoReconnect(
+                for: remote.id,
+                trigger: trigger,
+                bypassReachabilityGate: allowingReachabilityBypass
+            )
         }
 
         refreshRecoveryIndicator()
@@ -2086,7 +2169,11 @@ final class RemotesViewModel: ObservableObject {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func scheduleAutoReconnect(for remoteID: UUID, trigger: String) {
+    private func scheduleAutoReconnect(
+        for remoteID: UUID,
+        trigger: String,
+        bypassReachabilityGate: Bool = false
+    ) {
         cancelScheduledReconnect(for: remoteID)
         reconnectInFlight.insert(remoteID)
 
@@ -2132,7 +2219,7 @@ final class RemotesViewModel: ObservableObject {
                 return
             }
 
-            guard self.desiredConnections.contains(remoteID), self.networkReachable else {
+            guard self.desiredConnections.contains(remoteID), (self.networkReachable || bypassReachabilityGate) else {
                 return
             }
 
@@ -2248,6 +2335,27 @@ final class RemotesViewModel: ObservableObject {
 
         diagnostics.append(level: .info, category: "recovery", message: "Cancelled \(count) scheduled reconnect task(s): \(reason).")
         refreshRecoveryIndicator()
+    }
+
+    /// Beginner note: NWPathMonitor can occasionally lag or miss restoration transitions.
+    /// Keep a bounded periodic reconnect probe so desired remotes do not stay stranded forever.
+    private func shouldAllowPeriodicRecoveryDespiteReachabilityFalse(trigger: String) -> Bool {
+        let hasPendingStartup = !pendingStartupAutoConnectIDs.isEmpty
+        let desiredRemoteStates = remotes.compactMap { remote -> RemoteConnectionState? in
+            guard desiredConnections.contains(remote.id) else {
+                return nil
+            }
+            return status(for: remote.id).state
+        }
+
+        return Self.shouldAllowPeriodicRecoveryDespiteReachabilityFalse(
+            networkReachable: networkReachable,
+            trigger: trigger,
+            hasPendingStartup: hasPendingStartup,
+            desiredRemoteStates: desiredRemoteStates,
+            secondsSinceLastBypass: Date().timeIntervalSince(lastReachabilityBypassRecoveryAt),
+            interval: healthyPeriodicProbeInterval
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -2471,6 +2579,43 @@ final class RemotesViewModel: ObservableObject {
             return .unchanged
         }
         return currentReachable ? .becameReachable : .becameUnreachable
+    }
+
+    nonisolated static func connectivityLossCleanupTargets(
+        remotes: [RemoteConfig],
+        statuses: [UUID: RemoteStatus],
+        desiredConnections: Set<UUID>
+    ) -> [RemoteConfig] {
+        remotes.filter { remote in
+            guard desiredConnections.contains(remote.id) else {
+                return false
+            }
+            return (statuses[remote.id] ?? .initial).state != .disconnected
+        }
+    }
+
+    nonisolated static func shouldAllowPeriodicRecoveryDespiteReachabilityFalse(
+        networkReachable: Bool,
+        trigger: String,
+        hasPendingStartup: Bool,
+        desiredRemoteStates: [RemoteConnectionState],
+        secondsSinceLastBypass: TimeInterval,
+        interval: TimeInterval
+    ) -> Bool {
+        guard !networkReachable else {
+            return false
+        }
+
+        guard trigger.lowercased() == "periodic" else {
+            return false
+        }
+
+        let hasDesiredNonConnectedRemote = desiredRemoteStates.contains { $0 != .connected }
+        guard hasPendingStartup || hasDesiredNonConnectedRemote else {
+            return false
+        }
+
+        return secondsSinceLastBypass >= interval
     }
 
     nonisolated static func requiredRecoveryStrikes(for trigger: String) -> Int {
@@ -3039,6 +3184,8 @@ final class RemotesViewModel: ObservableObject {
         recoveryBurstTask = nil
         networkRestoreDebounceTask?.cancel()
         networkRestoreDebounceTask = nil
+        networkLossCleanupTask?.cancel()
+        networkLossCleanupTask = nil
 
         operationWatchdogTasks.values.forEach { $0.cancel() }
         operationWatchdogTasks.removeAll()
