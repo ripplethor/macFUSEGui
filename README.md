@@ -2,6 +2,7 @@
 
 `macfuseGui` is a macOS menu bar agent app for mounting remote directories with `sshfs` + macFUSE.
 
+- Website: https://www.macfusegui.app/
 - macOS 13+
 - Apple Silicon first (`arm64`), Intel supported (`ARCH_OVERRIDE=x86_64`)
 - Release flow defaults to dual-arch artifacts (`ARCH_OVERRIDE=both`)

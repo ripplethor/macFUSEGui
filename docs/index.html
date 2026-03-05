@@ -4,10 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>macFUSEGui - Elegant SSHFS Management for macOS</title>
-    <meta name="description"
-        content="A premium, native-feeling macOS menu bar app for managing SSHFS mounts. Secure, reliable, with separate Apple Silicon and Intel builds.">
+    <title>macFUSE GUI for macOS - SSHFS Menu Bar App</title>
+    <meta name="description" content="macFUSE GUI for macOS: a native menu bar app to manage SSHFS mounts with macFUSE. Secure Keychain storage, auto-reconnect, and separate Apple Silicon and Intel builds.">
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+    <meta name="application-name" content="macFUSEGui">
     <link rel="canonical" href="https://www.macfusegui.app/">
+    <link rel="sitemap" type="application/xml" href="sitemap.xml">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#123677">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#071330">
     <!-- Performance -->
@@ -23,9 +25,10 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.macfusegui.app/">
-    <meta property="og:title" content="macFUSEGui - Elegant SSHFS for macOS">
-    <meta property="og:description"
-        content="Secure, reliable remote filesystem mounting. Separate Apple Silicon and Intel builds. Manage multiple connections with a native menu bar experience.">
+    <meta property="og:site_name" content="macFUSEGui">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:title" content="macFUSE GUI for macOS - SSHFS Menu Bar App">
+    <meta property="og:description" content="A native macFUSE GUI for SSHFS on macOS. Manage multiple remotes, recover after sleep/wake, and keep credentials in Keychain.">
     <meta property="og:image" content="https://www.macfusegui.app/assets/og-image.webp">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -34,9 +37,8 @@
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://www.macfusegui.app/">
-    <meta property="twitter:title" content="macFUSEGui - Elegant SSHFS for macOS">
-    <meta property="twitter:description"
-        content="Secure, reliable remote filesystem mounting. Separate Apple Silicon and Intel builds.">
+    <meta property="twitter:title" content="macFUSE GUI for macOS - SSHFS Menu Bar App">
+    <meta property="twitter:description" content="A native macFUSE GUI for SSHFS on macOS with Keychain-backed auth, per-remote controls, and recovery automation.">
     <meta property="twitter:image" content="https://www.macfusegui.app/assets/og-image.webp">
     <meta property="twitter:image:alt" content="macFUSEGui app icon and tagline on a dark nebula background">
 
@@ -45,20 +47,34 @@
 [
   {
     "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "macFUSEGui",
+    "url": "https://www.macfusegui.app/",
+    "inLanguage": "en-US",
+    "description": "macFUSE GUI for macOS to manage SSHFS mounts with macFUSE."
+  },
+  {
+    "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "macFUSEGui",
-    "operatingSystem": "macOS",
+    "alternateName": "macFUSE GUI",
+    "url": "https://www.macfusegui.app/",
+    "operatingSystem": "macOS 13 or later",
     "applicationCategory": "UtilitiesApplication",
+    "keywords": "macfuse gui, sshfs gui mac, macfuse sshfs, sshfs macos",
+    "softwareRequirements": "macFUSE and sshfs",
+    "isAccessibleForFree": true,
     "sameAs": [
       "https://github.com/ripplethor/macfuseGUI"
     ],
     "downloadUrl": "https://github.com/ripplethor/macfuseGUI/releases/latest",
+    "screenshot": "https://www.macfusegui.app/assets/og-image.webp",
     "offers": {
       "@type": "Offer",
       "price": "0",
       "priceCurrency": "USD"
     },
-    "description": "A native macOS menu bar app for managing SSHFS mounts with macFUSE and sshfs."
+    "description": "A native macOS menu bar app and macFUSE GUI for managing SSHFS mounts with macFUSE and sshfs."
   },
   {
     "@context": "https://schema.org",
@@ -169,7 +185,7 @@
     </noscript>
 
     <!-- Site Logic -->
-    <script src="assets/site.js?v=20260220-63" defer></script>
+    <script src="assets/site.js?v=20260305-01" defer></script>
 </head>
 
 <body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
@@ -259,7 +275,7 @@
                 <div>
                     <h1
                         class="text-6xl sm:text-8xl font-black tracking-tight text-gray-900 dark:text-white mb-6 leading-none">
-                        <span class="inline-block [word-spacing:0.10em]">macFUSE SSHFS GUI</span> <br />
+                        <span class="inline-block [word-spacing:0.10em]">macFUSE GUI SSHFS</span> <br />
                         <span
                             class="inline-block [word-spacing:0.10em] text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600">for
                             macOS.</span>
@@ -270,6 +286,14 @@
                             class="bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono text-blue-600 dark:text-blue-400">mount</code>
                         commands; macFUSEGui uses macFUSE + sshfs to mount SSHFS on macOS, with separate Apple Silicon
                         (arm64) and Intel (x86_64) builds.
+                    </p>
+                    <p class="mt-1 max-w-3xl mx-auto text-base sm:text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+                        Looking for a <strong>macFUSE GUI</strong> for macOS? macFUSEGui provides a reliable SSHFS GUI with per-remote controls, auto-reconnect, and Keychain-backed credentials.
+                    </p>
+                    <p class="mt-3">
+                        <a href="macfuse-gui.html" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">
+                            Read the macFUSE GUI quick guide
+                        </a>
                     </p>
 
                     <div class="mt-10 flex justify-center gap-4 mb-20">
@@ -301,7 +325,7 @@
                 <!-- Product Visualization (Desktop Scene) -->
                 <div class="relative max-w-5xl mx-auto perspective-1000">
                     <div
-                        class="hero-visual relative w-full h-[600px] bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-700 bg-[url('assets/hero-bg.webp')] bg-cover bg-center">
+                        class="hero-visual hero-stage relative w-full h-[600px] bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-700 bg-[url('assets/hero-bg.webp')] bg-cover bg-center">
                         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
 
                         <!-- 1. Menu Bar -->
@@ -734,7 +758,7 @@
                 <div class="text-center mb-16">
                     <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">Install</h2>
                     <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        Install with Homebrew, one-line Terminal installer, or manual DMG. Then mount SSHFS on
+                        Install macFUSE GUI with Homebrew, one-line Terminal installer, or manual DMG. Then mount SSHFS on
                         macOS.
                     </p>
                 </div>
@@ -907,7 +931,7 @@ brew install gromgit/fuse/sshfs-mac</code></pre>
                 <div class="text-center mb-16">
                     <h2 class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">How it works</h2>
                     <p class="mt-4 text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        macFUSEGui is a native menu bar app that orchestrates sshfs and macFUSE so remote folders
+                        macFUSE Gui is a native menu bar app that orchestrates sshfs and macFUSE so remote folders
                         mount like normal directories in Finder and your editor.
                     </p>
                 </div>
@@ -916,7 +940,7 @@ brew install gromgit/fuse/sshfs-mac</code></pre>
                     <ul class="space-y-5 text-gray-700 dark:text-gray-300 leading-relaxed">
                         <li>
                             <strong class="text-gray-900 dark:text-white">Orchestrates sshfs:</strong>
-                            macFUSEGui builds safe mount commands and manages connect, disconnect, and recovery.
+                            macFUSE Gui builds safe mount commands and manages connect, disconnect, and recovery.
                         </li>
                         <li>
                             <strong class="text-gray-900 dark:text-white">macFUSE provides the filesystem

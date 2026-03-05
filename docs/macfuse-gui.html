@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>macFUSE GUI: SSHFS GUI for macOS | macFUSEGui</title>
+    <meta name="description" content="macFUSE GUI for macOS. Learn what macFUSEGui does, how to install it, and how to manage SSHFS mounts with Keychain-backed auth and reconnect recovery.">
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
+    <meta name="application-name" content="macFUSEGui">
+    <link rel="canonical" href="https://www.macfusegui.app/macfuse-gui.html">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#123677">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#071330">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://www.macfusegui.app/macfuse-gui.html">
+    <meta property="og:site_name" content="macFUSEGui">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:title" content="macFUSE GUI: SSHFS GUI for macOS">
+    <meta property="og:description" content="A dedicated guide for the macfuse gui topic: installation, requirements, workflow, and troubleshooting.">
+    <meta property="og:image" content="https://www.macfusegui.app/assets/og-image.webp">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/webp">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://www.macfusegui.app/macfuse-gui.html">
+    <meta property="twitter:title" content="macFUSE GUI: SSHFS GUI for macOS">
+    <meta property="twitter:description" content="Dedicated macfuse gui page for macOS users who need a reliable SSHFS mount manager.">
+    <meta property="twitter:image" content="https://www.macfusegui.app/assets/og-image.webp">
+    <meta property="twitter:image:alt" content="macFUSEGui app icon and tagline on a dark nebula background">
+
+    <script>
+        (function () {
+            try {
+                const saved = localStorage.getItem("theme");
+                const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                if (saved === "dark") {
+                    document.documentElement.classList.add("dark");
+                } else if (saved === "light") {
+                    document.documentElement.classList.remove("dark");
+                } else if (prefersDark) {
+                    document.documentElement.classList.add("dark");
+                }
+            } catch (e) { }
+        })();
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @custom-variant dark (&:where(.dark, .dark *));
+    </style>
+    <link rel="stylesheet" href="assets/site.css?v=20260226-775">
+
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "macFUSE GUI: SSHFS GUI for macOS",
+  "description": "Dedicated guide for using macFUSEGui as a macFUSE GUI to manage SSHFS mounts on macOS.",
+  "inLanguage": "en-US",
+  "url": "https://www.macfusegui.app/macfuse-gui.html",
+  "mainEntityOfPage": "https://www.macfusegui.app/macfuse-gui.html",
+  "datePublished": "2026-03-05",
+  "dateModified": "2026-03-05",
+  "keywords": [
+    "macfuse gui",
+    "sshfs gui mac",
+    "macfuse sshfs",
+    "sshfs macos"
+  ],
+  "author": {
+    "@type": "Organization",
+    "name": "macFUSEGui Contributors"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "macFUSEGui Contributors"
+  }
+}
+    </script>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12">
+        <a href="index.html" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold">
+            Back to macFUSEGui Home
+        </a>
+
+        <section class="space-y-5">
+            <h1 class="text-4xl sm:text-5xl font-black tracking-tight text-gray-900 dark:text-white">macFUSE GUI for macOS</h1>
+            <p class="text-lg leading-relaxed text-gray-700 dark:text-gray-300">
+                This is the dedicated <strong>macfuse gui</strong> page for macOS users who want SSHFS mounts without daily command-line mount workflows.
+                <strong>macFUSEGui</strong> is a menu bar control layer on top of macFUSE + sshfs: it manages connection state, recovery, and usability.
+            </p>
+        </section>
+
+        <section class="space-y-4">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">What makes this different from CLI-only SSHFS</h2>
+            <ul class="space-y-2 text-gray-700 dark:text-gray-300 leading-relaxed">
+                <li>Independent per-remote connect and disconnect actions</li>
+                <li>Password and key authentication with Keychain-backed password storage</li>
+                <li>Auto-reconnect behavior after sleep/wake and network restoration</li>
+                <li>Clear status visibility from a native macOS menu bar app</li>
+                <li>Diagnostics snapshots for troubleshooting failed mounts</li>
+            </ul>
+        </section>
+
+        <section class="space-y-4">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Install checklist</h2>
+            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                Use this checklist when evaluating or installing a macFUSE GUI on macOS:
+            </p>
+            <ol class="space-y-3 text-gray-700 dark:text-gray-300 leading-relaxed list-decimal list-inside">
+                <li>Install prerequisites: macFUSE and sshfs.</li>
+                <li>Choose the correct build for your CPU architecture.</li>
+                <li>Download the latest release and complete first-launch security approval.</li>
+                <li>Add a remote host and test connection from the app UI.</li>
+            </ol>
+            <pre class="p-4 rounded-xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-x-auto"><code class="font-mono text-sm">brew install --cask macFUSE
+brew install gromgit/fuse/sshfs-mac</code></pre>
+            <pre class="p-4 rounded-xl bg-gray-950/90 text-gray-100 border border-white/10 overflow-x-auto"><code class="font-mono text-sm">uname -m</code></pre>
+        </section>
+
+        <section class="space-y-4">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">First launch and security note</h2>
+            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                Current public builds are unsigned and not notarized. Open once via Finder right-click (or Control-click)
+                <strong>Open</strong>, or approve in <strong>System Settings → Privacy & Security</strong>.
+            </p>
+        </section>
+
+        <section class="space-y-4">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Daily workflow</h2>
+            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                Typical usage is: create remote entry, connect, work through Finder/editor, and disconnect when done.
+                If the network changes, recovery logic attempts to restore desired remotes automatically.
+            </p>
+        </section>
+
+        <section class="space-y-4">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Troubleshooting quick checks</h2>
+            <ul class="space-y-2 text-gray-700 dark:text-gray-300 leading-relaxed">
+                <li>Verify both macFUSE and sshfs are installed.</li>
+                <li>Check that local mount paths do not collide with other remotes.</li>
+                <li>Confirm your credentials and host reachability.</li>
+                <li>Use diagnostics output to capture mount and recovery state.</li>
+            </ul>
+        </section>
+
+        <section class="flex flex-wrap gap-3">
+            <a href="https://github.com/ripplethor/macfuseGUI/releases/latest" class="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                Download Latest Release
+            </a>
+            <a href="https://github.com/ripplethor/macfuseGUI" class="px-5 py-3 rounded-xl glass-panel text-gray-900 dark:text-white font-semibold border border-gray-200 dark:border-white/10">
+                View Source on GitHub
+            </a>
+            <a href="index.html#install" class="px-5 py-3 rounded-xl glass-panel text-gray-900 dark:text-white font-semibold border border-gray-200 dark:border-white/10">
+                Open Full Install Section
+            </a>
+        </section>
+
+        <p class="text-sm text-gray-500 dark:text-gray-400">Updated: 2026-03-05</p>
+    </main>
+</body>
+</html>

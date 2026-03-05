@@ -15,8 +15,23 @@ const yearSpan = document.getElementById("current-year");
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const prefersCoarsePointer = window.matchMedia("(pointer: coarse)");
+const THEME_STORAGE_KEY = "theme";
 const FX_MODE_STORAGE_KEY = "fx-mode";
 let isLiteFxMode = false;
+
+function readStorage(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch (e) {
+        return null;
+    }
+}
+
+function writeStorage(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e) { }
+}
 
 function detectAutoLiteFxMode() {
     const saveData = Boolean(navigator.connection && navigator.connection.saveData);
@@ -29,12 +44,10 @@ function detectAutoLiteFxMode() {
 }
 
 function resolvePreferredFxMode() {
-    try {
-        const saved = localStorage.getItem(FX_MODE_STORAGE_KEY);
-        if (saved === "lite" || saved === "full") {
-            return saved;
-        }
-    } catch (e) { }
+    const saved = readStorage(FX_MODE_STORAGE_KEY);
+    if (saved === "lite" || saved === "full") {
+        return saved;
+    }
 
     return detectAutoLiteFxMode() ? "lite" : "full";
 }
@@ -54,8 +67,20 @@ function setupVisibilityPerformance() {
     });
 }
 
+function setupScrolledHeader() {
+    const header = document.querySelector("header");
+    if (!header) return;
+
+    const updateScrolledState = () => {
+        header.dataset.scrolled = window.scrollY > 8 ? "true" : "false";
+    };
+
+    updateScrolledState();
+    window.addEventListener("scroll", updateScrolledState, { passive: true });
+}
+
 function initTheme() {
-    const savedTheme = localStorage.getItem("theme");
+    const savedTheme = readStorage(THEME_STORAGE_KEY);
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
     if (savedTheme === "dark") {
@@ -74,8 +99,13 @@ function initTheme() {
 function toggleTheme() {
     const nextIsDark = !root.classList.contains("dark");
     root.classList.remove("theme-fading");
+    void root.offsetWidth;
+    root.classList.add("theme-fading");
+    window.setTimeout(() => {
+        root.classList.remove("theme-fading");
+    }, 320);
     root.classList.toggle("dark", nextIsDark);
-    localStorage.setItem("theme", nextIsDark ? "dark" : "light");
+    writeStorage(THEME_STORAGE_KEY, nextIsDark ? "dark" : "light");
     updateThemeUI();
 }
 
@@ -227,6 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupAdaptiveFxMode();
     setYear();
     setupVisibilityPerformance();
+    setupScrolledHeader();
     setupAccordion();
     void updateHeroVersion();
 
