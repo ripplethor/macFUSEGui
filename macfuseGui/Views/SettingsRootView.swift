@@ -13,6 +13,8 @@ import SwiftUI
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct SettingsRootView: View {
+    static let minimumWindowSize = NSSize(width: 980, height: 720)
+
     @ObservedObject var viewModel: RemotesViewModel
     let onOpenEditorPlugins: () -> Void
 
@@ -20,96 +22,34 @@ struct SettingsRootView: View {
     @State private var pendingRemoteDeletion: PendingRemoteDeletion?
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 16) {
             if let message = viewModel.alertMessage, !message.isEmpty {
-                HStack {
-                    Text(message)
-                        .font(.callout)
-                    Spacer()
-                    Button("Dismiss") {
-                        viewModel.alertMessage = nil
-                    }
-                    .buttonStyle(.link)
-                }
-                .padding(10)
-                .background(Color.orange.opacity(0.18))
+                settingsAlertBanner(message: message)
             }
 
-            HStack(spacing: 12) {
-                Toggle("Launch At Login", isOn: launchAtLoginBinding)
-                    .toggleStyle(.switch)
-                    .help("Open macfuseGui automatically when you log in.")
+            settingsHeader
 
-                if viewModel.launchAtLoginState.requiresApproval {
-                    Text("Pending approval in System Settings -> General -> Login Items.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                } else if let detail = viewModel.launchAtLoginState.detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            GeometryReader { geometry in
+                let paneHeight = max(0, geometry.size.height)
+
+                HStack(alignment: .top, spacing: 16) {
+                    remotesPane
+                        .frame(minWidth: 410, idealWidth: 426, maxWidth: 440, alignment: .topLeading)
+                        .frame(height: paneHeight, alignment: .topLeading)
+
+                    detailPanel
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .frame(height: paneHeight, alignment: .topLeading)
                 }
-
-                Spacer()
-
-                Button {
-                    onOpenEditorPlugins()
-                } label: {
-                    Label("Editor Plugins", systemImage: "puzzlepiece.extension")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
-
-            Divider()
-
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Remotes")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Spacer()
-                        Button("Add") {
-                            openEditor(
-                                with: RemoteDraft(
-                                    port: 22,
-                                    authMode: .privateKey,
-                                    remoteDirectory: "/"
-                                )
-                            )
-                        }
-                    }
-                    .padding([.top, .horizontal], 12)
-
-                    RemotesListView(
-                        remotes: viewModel.remotes,
-                        statuses: viewModel.statuses,
-                        badgeStateForRemote: { remoteID in
-                            viewModel.statusBadgeState(for: remoteID)
-                        },
-                        selectedRemoteID: $viewModel.selectedRemoteID,
-                        onConnect: { id in
-                            Task { await viewModel.connect(remoteID: id) }
-                        },
-                        onDisconnect: { id in
-                            Task { await viewModel.disconnect(remoteID: id) }
-                        }
-                    )
-                }
-                .frame(minWidth: 430)
-
-                Divider()
-
-                detailPanel
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .frame(minWidth: 960, minHeight: 620)
+        .padding(18)
+        .frame(
+            minWidth: Self.minimumWindowSize.width,
+            minHeight: Self.minimumWindowSize.height
+        )
+        .background(Color(NSColor.windowBackgroundColor))
         .sheet(item: $activeEditorSession) { session in
             RemoteEditorView(initialDraft: session.draft, remotesViewModel: viewModel) { savedID in
                 activeEditorSession = nil
@@ -145,94 +85,539 @@ struct SettingsRootView: View {
         }
     }
 
+    private var settingsHeader: some View {
+        HStack(alignment: .top, spacing: 18) {
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.blue.opacity(0.22), Color.teal.opacity(0.16)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Image(systemName: "gearshape.2.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+                .frame(width: 54, height: 54)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Settings")
+                        .font(.title2.weight(.bold))
+
+                    Text("Manage saved remotes, login behavior, and editor integration from one place.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        settingsMetricChip(
+                            text: "\(viewModel.remotes.count) Remotes",
+                            systemImage: "server.rack",
+                            tint: .blue
+                        )
+                        settingsMetricChip(
+                            text: launchStateSummaryText,
+                            systemImage: launchStateSymbolName,
+                            tint: launchStateTint
+                        )
+                    }
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Startup")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Toggle("Launch At Login", isOn: launchAtLoginBinding)
+                    .toggleStyle(.switch)
+                    .help("Open macfuseGui automatically when you log in.")
+
+                Text(launchStateDetailText)
+                    .font(.caption)
+                    .foregroundStyle(launchStateTint)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    onOpenEditorPlugins()
+                } label: {
+                    Label("Editor Plugins", systemImage: "puzzlepiece.extension")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+            }
+            .frame(width: 290, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .padding(18)
+        .background(settingsSurfaceFill(accent: .blue))
+        .overlay(settingsSurfaceStroke())
+    }
+
+    private func settingsAlertBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+
+            Text(message)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("Dismiss") {
+                viewModel.alertMessage = nil
+            }
+            .buttonStyle(.link)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.orange.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.orange.opacity(0.30), lineWidth: 1)
+        )
+    }
+
+    private var remotesPane: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("Remotes")
+                            .font(.title3.weight(.bold))
+                        settingsMetricChip(
+                            text: "\(viewModel.remotes.count)",
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            tint: .indigo
+                        )
+                    }
+
+                    Text("Select a profile on the left, then manage details and actions on the right.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 12)
+
+                Button {
+                    openEditor(
+                        with: RemoteDraft(
+                            port: 22,
+                            authMode: .privateKey,
+                            remoteDirectory: "/"
+                        )
+                    )
+                } label: {
+                    Label("Add Remote", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+            }
+            .padding(18)
+
+            Divider()
+                .padding(.horizontal, 18)
+
+            RemotesListView(
+                remotes: viewModel.remotes,
+                statuses: viewModel.statuses,
+                badgeStateForRemote: { remoteID in
+                    viewModel.statusBadgeState(for: remoteID)
+                },
+                selectedRemoteID: $viewModel.selectedRemoteID,
+                onConnect: { id in
+                    Task { await viewModel.connect(remoteID: id) }
+                },
+                onDisconnect: { id in
+                    Task { await viewModel.disconnect(remoteID: id) }
+                }
+            )
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .background(settingsSurfaceFill(accent: .indigo))
+        .overlay(settingsSurfaceStroke())
+    }
+
     @ViewBuilder
     private var detailPanel: some View {
         if let remote = selectedRemote {
             let status = viewModel.status(for: remote.id)
 
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text(remote.displayName)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    StatusBadgeView(state: viewModel.statusBadgeState(for: remote.id))
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 10) {
+                            Text(remote.displayName)
+                                .font(.title2.weight(.bold))
+                            if remote.autoConnectOnLaunch {
+                                settingsMetricChip(
+                                    text: "Auto Connect",
+                                    systemImage: "bolt.fill",
+                                    tint: .orange
+                                )
+                            }
+                        }
+
+                        Text("\(remote.username)@\(remote.host):\(remote.port)")
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
+
+                    StatusBadgeView(state: viewModel.statusBadgeState(for: remote.id))
                 }
 
-                Group {
-                    Text("Host: \(remote.host)")
-                    Text("Port: \(remote.port)")
-                    Text("Username: \(remote.username)")
-                    Text("Auth: \(remote.authMode.displayName)")
-                    Text("Auto-connect on launch: \(remote.autoConnectOnLaunch ? "On" : "Off")")
-                    Text("Remote Directory: \(remote.remoteDirectory)")
-                    Text("Local Mount Point: \(remote.localMountPoint)")
+                detailSection(title: "Connection", accent: .blue) {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(minimum: 140), spacing: 16),
+                            GridItem(.flexible(minimum: 140), spacing: 16)
+                        ],
+                        alignment: .leading,
+                        spacing: 14
+                    ) {
+                        detailField(title: "Host", value: remote.host)
+                        detailField(title: "Port", value: "\(remote.port)")
+                        detailField(title: "Username", value: remote.username)
+                        detailField(title: "Authentication", value: remote.authMode.displayName)
+                    }
                 }
-                .font(.body)
+
+                detailSection(title: "Mount", accent: .teal) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        detailField(title: "Remote Directory", value: remote.remoteDirectory, monospaced: true)
+                        detailField(title: "Local Mount Point", value: remote.localMountPoint, monospaced: true)
+                        detailField(
+                            title: "Startup Behavior",
+                            value: remote.autoConnectOnLaunch
+                                ? "Connect automatically when the app launches."
+                                : "Connect manually when you choose."
+                        )
+                    }
+                }
 
                 if let mounted = status.mountedPath {
-                    Text("Mounted Path: \(mounted)")
-                        .font(.callout)
-                        .foregroundStyle(.green)
+                    statusCallout(
+                        title: "Mounted",
+                        message: mounted,
+                        tint: .green
+                    )
                 }
 
                 if let error = status.lastError, !error.isEmpty {
-                    Text("Last Error: \(shortError(error))")
-                        .font(.callout)
-                        .foregroundStyle(.red)
+                    statusCallout(
+                        title: "Last Error",
+                        message: shortError(error),
+                        tint: .red
+                    )
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
 
                 HStack(spacing: 10) {
-                    Button("Edit") {
+                    Button {
                         let draft = RemoteDraft(remote: remote)
                         openEditor(with: draft)
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
                     }
+                    .buttonStyle(.bordered)
 
-                    Button("Duplicate") {
+                    Button {
                         var draft = RemoteDraft(remote: remote)
                         draft.id = nil
                         draft.displayName = duplicateDisplayName(for: remote.displayName)
                         openEditor(with: draft)
+                    } label: {
+                        Label("Duplicate", systemImage: "plus.square.on.square")
                     }
+                    .buttonStyle(.bordered)
 
-                    Button("Delete") {
+                    Button {
                         pendingRemoteDeletion = PendingRemoteDeletion(
                             id: remote.id,
                             displayName: remote.displayName
                         )
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
                     .foregroundStyle(.red)
 
-                    Button("Refresh") {
-                        Task { await viewModel.refreshStatus(remoteID: remote.id) }
-                    }
-
                     Spacer()
 
-                    Button("Connect") {
-                        Task { await viewModel.connect(remoteID: remote.id) }
+                    Button {
+                        Task { await viewModel.refreshStatus(remoteID: remote.id) }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
                     }
-                    .disabled(!status.canConnect)
+                    .buttonStyle(.bordered)
 
-                    Button("Disconnect") {
-                        Task { await viewModel.disconnect(remoteID: remote.id) }
-                    }
-                    .disabled(!status.canDisconnect)
+                    connectionActionButton(remoteID: remote.id, status: status)
                 }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.74))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                )
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(settingsSurfaceFill(accent: detailAccent(for: status)))
+            .overlay(settingsSurfaceStroke())
         } else {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.gray.opacity(0.18), Color.blue.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+                .frame(width: 56, height: 56)
+
                 Text("Select a remote")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                Text("Add a remote or select one from the list to edit connection settings.")
+                    .font(.title3.weight(.bold))
+
+                Text("Choose a saved profile on the left, or add a new one to start managing mounts.")
                     .foregroundStyle(.secondary)
-                Spacer()
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    openEditor(
+                        with: RemoteDraft(
+                            port: 22,
+                            authMode: .privateKey,
+                            remoteDirectory: "/"
+                        )
+                    )
+                } label: {
+                    Label("Add Remote", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+
+                Spacer(minLength: 0)
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(settingsSurfaceFill(accent: .gray))
+            .overlay(settingsSurfaceStroke())
+        }
+    }
+
+    private var launchStateSummaryText: String {
+        if viewModel.launchAtLoginState.requiresApproval {
+            return "Approval Needed"
+        }
+        return viewModel.launchAtLoginState.enabled ? "Launch Enabled" : "Launch Disabled"
+    }
+
+    private var launchStateDetailText: String {
+        if viewModel.launchAtLoginState.requiresApproval {
+            return "Pending approval in System Settings -> General -> Login Items."
+        }
+        if let detail = viewModel.launchAtLoginState.detail, !detail.isEmpty {
+            return detail
+        }
+        return viewModel.launchAtLoginState.enabled
+            ? "The app opens automatically when you log in."
+            : "The app launches manually until you enable startup."
+    }
+
+    private var launchStateTint: Color {
+        if viewModel.launchAtLoginState.requiresApproval {
+            return .orange
+        }
+        return viewModel.launchAtLoginState.enabled ? .green : .secondary
+    }
+
+    private var launchStateSymbolName: String {
+        if viewModel.launchAtLoginState.requiresApproval {
+            return "exclamationmark.circle.fill"
+        }
+        return viewModel.launchAtLoginState.enabled ? "checkmark.circle.fill" : "minus.circle.fill"
+    }
+
+    private func settingsMetricChip(text: String, systemImage: String, tint: Color) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(0.12))
+            )
+    }
+
+    private func settingsSurfaceFill(accent: Color) -> some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(NSColor.controlBackgroundColor).opacity(0.90),
+                        accent.opacity(0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+
+    private func settingsSurfaceStroke() -> some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+    }
+
+    private func detailSection<Content: View>(
+        title: String,
+        accent: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 7, height: 7)
+
+                Text(title)
+                    .font(.headline)
+            }
+
+            content()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func detailField(title: String, value: String, monospaced: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(monospaced ? .system(.callout, design: .monospaced) : .callout)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func statusCallout(title: String, message: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(tint.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(tint.opacity(0.24), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private func connectionActionButton(remoteID: UUID, status: RemoteStatus) -> some View {
+        switch status.state {
+        case .connected:
+            Button {
+                Task { await viewModel.disconnect(remoteID: remoteID) }
+            } label: {
+                Label("Disconnect", systemImage: "bolt.slash.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        case .connecting:
+            Label("Connecting", systemImage: "arrow.triangle.2.circlepath")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.blue.opacity(0.12))
+                )
+        case .disconnecting:
+            Label("Disconnecting", systemImage: "arrow.triangle.2.circlepath")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.orange.opacity(0.12))
+                )
+        case .disconnected, .error:
+            Button {
+                Task { await viewModel.connect(remoteID: remoteID) }
+            } label: {
+                Label("Connect", systemImage: "bolt.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .disabled(!status.canConnect)
+        }
+    }
+
+    private func detailAccent(for status: RemoteStatus) -> Color {
+        switch status.state {
+        case .connected:
+            return .green
+        case .connecting, .disconnecting:
+            return .orange
+        case .error:
+            return .red
+        case .disconnected:
+            return .blue
         }
     }
 

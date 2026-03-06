@@ -9,28 +9,45 @@
 import AppKit
 import SwiftUI
 
+private let baseSettingsDefaultWindowSize = NSSize(width: 980, height: 620)
+private let baseSettingsMinimumWindowSize = NSSize(width: 600, height: 400)
+
 @MainActor
 /// Beginner note: Shared window setup keeps sizing, activation, and persistence behavior consistent.
 class BaseSettingsWindowController: NSWindowController {
-    private static let defaultWindowSize = NSSize(width: 980, height: 620)
-    private static let minimumWindowSize = NSSize(width: 600, height: 400)
-
     private let hasSavedFrame: Bool
     private var didApplyInitialCentering = false
+
+    /// Beginner note: Initializers create valid state before any other method is used.
+    convenience init(
+        rootView: AnyView,
+        title: String,
+        frameAutosaveName: String
+    ) {
+        self.init(
+            rootView: rootView,
+            title: title,
+            frameAutosaveName: frameAutosaveName,
+            defaultWindowSize: baseSettingsDefaultWindowSize,
+            minimumWindowSize: baseSettingsMinimumWindowSize
+        )
+    }
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(
         rootView: AnyView,
         title: String,
-        frameAutosaveName: String
+        frameAutosaveName: String,
+        defaultWindowSize: NSSize,
+        minimumWindowSize: NSSize
     ) {
         hasSavedFrame = UserDefaults.standard.object(forKey: "NSWindow Frame \(frameAutosaveName)") != nil
         let hosting = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hosting)
         window.title = title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(Self.defaultWindowSize)
-        window.minSize = Self.minimumWindowSize
+        window.setContentSize(defaultWindowSize)
+        window.minSize = minimumWindowSize
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName(frameAutosaveName)
 
@@ -74,7 +91,9 @@ final class SettingsWindowController: BaseSettingsWindowController {
         super.init(
             rootView: AnyView(root),
             title: "\(appName) Settings",
-            frameAutosaveName: "SettingsWindow"
+            frameAutosaveName: "SettingsWindow",
+            defaultWindowSize: SettingsRootView.minimumWindowSize,
+            minimumWindowSize: SettingsRootView.minimumWindowSize
         )
     }
 
@@ -95,7 +114,9 @@ final class EditorPluginSettingsWindowController: BaseSettingsWindowController {
         super.init(
             rootView: AnyView(root),
             title: "Editor Plugins",
-            frameAutosaveName: "EditorPluginSettingsWindow"
+            frameAutosaveName: "EditorPluginSettingsWindow",
+            defaultWindowSize: baseSettingsDefaultWindowSize,
+            minimumWindowSize: baseSettingsMinimumWindowSize
         )
     }
 

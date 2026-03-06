@@ -103,7 +103,7 @@ final class MenuBarController: NSObject {
     private func configurePopover() {
         popover.behavior = .transient
         popover.animates = true
-        popover.contentSize = NSSize(width: 460, height: 520)
+        popover.contentSize = NSSize(width: 484, height: 548)
         installPopoverContentIfNeeded()
     }
 
@@ -598,11 +598,10 @@ private struct MenuPopoverContentView: View {
             recoverySection
 
             if viewModel.remotes.isEmpty {
-                Text("No remotes configured")
-                    .foregroundStyle(.secondary)
+                emptyState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 10) {
                         ForEach(viewModel.remotes) { remote in
                             RemotePopoverRow(
                                 remote: remote,
@@ -623,74 +622,173 @@ private struct MenuPopoverContentView: View {
                 }
             }
 
-            Divider()
-
-            HStack(spacing: 8) {
-                Button("Refresh", action: onRefresh)
-                Button("Copy Diagnostics", action: onCopyDiagnostics)
-                Button("Force Reset Mounts", action: onForceResetMounts)
-                Spacer()
-                Button("Settings…", action: onOpenSettings)
-                Button("Quit", action: onQuit)
-                    .keyboardShortcut("q", modifiers: [.command])
-            }
+            footerBar
         }
-        .padding(12)
-        .frame(width: 460, height: 520)
+        .padding(14)
+        .frame(width: 484, height: 548)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(NSColor.windowBackgroundColor),
+                    Color.blue.opacity(0.035)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
     }
 
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(MenuBarController.appDisplayName())
-                    .font(.headline)
-                Text(appVersionText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(MenuBarController.appDisplayName())
+                        .font(.title3.weight(.bold))
+                    Text(appVersionText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button {
+                        onRefresh()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Refresh all remote statuses")
+
+                    Button {
+                        onOpenSettings()
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Open Settings")
+                }
             }
-            Spacer()
-            Text(summaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(minimum: 110), spacing: 8),
+                    GridItem(.flexible(minimum: 110), spacing: 8),
+                    GridItem(.flexible(minimum: 110), spacing: 8)
+                ],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                metricChip(title: "Connected", value: summary.connected, tint: .green)
+                metricChip(title: "Reconnecting", value: summary.reconnecting, tint: .orange)
+                metricChip(title: "Active", value: summary.active, tint: .blue)
+                metricChip(title: "Errors", value: summary.errors, tint: .red)
+                metricChip(title: "Disconnected", value: summary.disconnected, tint: .secondary)
+            }
         }
+        .padding(14)
+        .background(menuSurfaceFill(accent: .blue))
+        .overlay(menuSurfaceStroke())
     }
 
     @ViewBuilder
     private var dependencySection: some View {
         if let dependency = viewModel.dependencyStatus, !dependency.isReady {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Dependencies missing")
-                    .font(.caption)
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Dependencies Missing", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.red)
+
                 ForEach(dependency.issues, id: \.self) { issue in
-                    Text("• \(issue)")
+                    Text(issue)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.82))
                 }
             }
-            Divider()
+            .padding(12)
+            .background(menuNoticeFill(tint: .red))
+            .overlay(menuNoticeStroke(tint: .red))
         }
     }
 
     @ViewBuilder
     private var recoverySection: some View {
         if let recovery = viewModel.recoveryIndicator {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
-                Text(
-                    "Re-establishing after \(recoveryReasonLabel(recovery.reason)) • pending \(recovery.pendingRemoteCount), queued \(recovery.scheduledReconnectCount)"
-                )
-                .font(.caption)
-                .foregroundStyle(.orange)
-                Spacer()
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Recovery In Progress")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text(
+                        "After \(recoveryReasonLabel(recovery.reason)) · pending \(recovery.pendingRemoteCount) · queued \(recovery.scheduledReconnectCount)"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.primary.opacity(0.82))
+                }
+
+                Spacer(minLength: 0)
             }
-            Divider()
+            .padding(12)
+            .background(menuNoticeFill(tint: .orange))
+            .overlay(menuNoticeStroke(tint: .orange))
         }
     }
 
-    private var summaryText: String {
-        viewModel.connectionSummary().compactDisplayText
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("No remotes configured")
+                .font(.headline)
+            Text("Open Settings to add your first SSHFS profile.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button("Open Settings", action: onOpenSettings)
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(menuSurfaceFill(accent: .gray))
+        .overlay(menuSurfaceStroke())
+    }
+
+    private var footerBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                onCopyDiagnostics()
+            } label: {
+                Label("Diagnostics", systemImage: "doc.on.doc")
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                onForceResetMounts()
+            } label: {
+                Label("Reset Mounts", systemImage: "wrench.and.screwdriver")
+            }
+            .buttonStyle(.bordered)
+            .tint(.orange)
+
+            Spacer(minLength: 0)
+
+            Button {
+                onQuit()
+            } label: {
+                Label("Quit", systemImage: "xmark.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .keyboardShortcut("q", modifiers: [.command])
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+    }
+
+    private var summary: RemotesViewModel.ConnectionSummary {
+        viewModel.connectionSummary()
     }
 
     private var preferredPluginDisplayName: String {
@@ -710,6 +808,54 @@ private struct MenuPopoverContentView: View {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func recoveryReasonLabel(_ reason: String) -> String {
         MenuBarController.recoveryReasonDisplayText(reason)
+    }
+
+    private func metricChip(title: String, value: Int, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text("\(value)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(tint.opacity(0.12))
+        )
+    }
+
+    private func menuSurfaceFill(accent: Color) -> some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(NSColor.controlBackgroundColor).opacity(0.92),
+                        accent.opacity(0.05)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+    }
+
+    private func menuSurfaceStroke() -> some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+    }
+
+    private func menuNoticeFill(tint: Color) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(tint.opacity(0.10))
+    }
+
+    private func menuNoticeStroke(tint: Color) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .stroke(tint.opacity(0.22), lineWidth: 1)
     }
 }
 
@@ -748,60 +894,169 @@ private struct RemotePopoverRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(remote.displayName)
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(remote.displayName)
+                        .font(.headline.weight(.semibold))
+
+                    Text("\(remote.username)@\(remote.host):\(remote.port)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer()
+
                 StatusBadgeView(state: badgeState)
             }
 
-            Text("\(remote.username)@\(remote.host):\(remote.port)  \(remote.remoteDirectory)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            infoLine(title: "Remote", systemImage: "folder", value: remote.remoteDirectory)
+            infoLine(title: "Local", systemImage: "internaldrive", value: remote.localMountPoint)
 
             if let mountedPath = status.mountedPath, !mountedPath.isEmpty {
-                Text("Mounted: \(mountedPath)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                infoLine(title: "Mounted", systemImage: "checkmark.circle.fill", value: mountedPath)
             }
 
             if let lastError = status.lastError, !lastError.isEmpty {
                 Text(lastError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-                    .truncationMode(.tail)
+                .font(.caption)
+                .foregroundStyle(.red)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.red.opacity(0.10))
+                )
             }
 
             HStack(spacing: 8) {
-                Button("Connect", action: onConnect)
-                    .disabled(!status.canConnect)
-                Button("Disconnect", action: onDisconnect)
-                    .disabled(!status.canDisconnect)
+                primaryActionButton
 
                 switch openEditorPresentationMode {
                 case .none:
-                    Button("Open in Editor") {}
+                    Button("Open In") {}
                         .disabled(true)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                 case .single:
-                    Button("Open in \(singleEditorDisplayName)", action: onOpenInPreferredEditor)
+                    Button {
+                        onOpenInPreferredEditor()
+                    } label: {
+                        Label("Open in \(singleEditorDisplayName)", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                         .disabled(status.state != .connected)
                 case .picker:
-                    Menu("Open In…") {
+                    Menu {
                         ForEach(activeEditorPlugins) { plugin in
                             Button(plugin.displayName) {
                                 onOpenInEditorPlugin(plugin.id)
                             }
                         }
+                    } label: {
+                        Label("Open In", systemImage: "square.and.arrow.up")
                     }
+                    .menuStyle(.borderlessButton)
                     .disabled(status.state != .connected)
                 }
-                Spacer()
+
+                Spacer(minLength: 0)
             }
         }
-        .padding(10)
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(NSColor.controlBackgroundColor).opacity(0.92),
+                            accentColor.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(accentColor.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private var accentColor: Color {
+        switch badgeState {
+        case .connected:
+            return .green
+        case .reconnecting, .connecting, .disconnecting:
+            return .orange
+        case .error:
+            return .red
+        case .disconnected:
+            return .blue
+        }
+    }
+
+    @ViewBuilder
+    private var primaryActionButton: some View {
+        switch status.state {
+        case .connected:
+            Button {
+                onDisconnect()
+            } label: {
+                Label("Disconnect", systemImage: "bolt.slash.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .controlSize(.small)
+        case .connecting:
+            Label("Connecting", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.blue.opacity(0.12))
+                )
+        case .disconnecting:
+            Label("Disconnecting", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.orange.opacity(0.12))
+                )
+        case .disconnected, .error:
+            Button {
+                onConnect()
+            } label: {
+                Label("Connect", systemImage: "bolt.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .controlSize(.small)
+            .disabled(!status.canConnect)
+        }
+    }
+
+    private func infoLine(title: String, systemImage: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(.primary.opacity(0.82))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

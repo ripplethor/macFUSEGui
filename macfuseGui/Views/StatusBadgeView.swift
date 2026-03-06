@@ -30,13 +30,25 @@ struct StatusBadgeView: View {
     }
 
     var body: some View {
-        Text(state.displayLabel)
-            .font(.caption)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(state.badgeColor.opacity(0.18))
-            .foregroundStyle(state.badgeColor)
-            .clipShape(Capsule())
+        HStack(spacing: 6) {
+            Circle()
+                .fill(state.badgeColor)
+                .frame(width: 6, height: 6)
+
+            Text(state.displayLabel)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(state.badgeColor.opacity(0.14))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(state.badgeColor.opacity(0.20), lineWidth: 1)
+        )
+        .foregroundStyle(state.badgeColor)
             .accessibilityLabel("Status: \(state.displayLabel)")
     }
 }

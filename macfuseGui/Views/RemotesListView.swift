@@ -6,6 +6,7 @@
 // Concurrency: Contains async functions; these can suspend and resume without blocking the calling thread.
 // Maintenance tip: Start reading top-to-bottom once, then follow one user action end-to-end through call sites.
 
+import AppKit
 import SwiftUI
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
@@ -20,14 +21,15 @@ struct RemotesListView: View {
 
     var body: some View {
         ScrollViewReader { scrollProxy in
-            List(selection: $selectedRemoteID) {
-                ForEach(remotes) { remote in
-                    row(remote)
-                        .tag(remote.id)
-                        .id(remote.id)
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(remotes) { remote in
+                        row(remote)
+                            .id(remote.id)
+                    }
                 }
             }
-            .listStyle(.inset(alternatesRowBackgrounds: true))
+            .padding(.vertical, 2)
             .onValueChange(of: selectedRemoteID) {
                 scrollSelectionToTop(using: scrollProxy)
             }
@@ -41,48 +43,83 @@ struct RemotesListView: View {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func row(_ remote: RemoteConfig) -> some View {
         let status = status(for: remote.id)
+        let badgeState = badgeStateForRemote(remote.id)
+        let isSelected = selectedRemoteID == remote.id
 
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(remote.displayName)
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(remote.displayName)
+                        .font(.headline.weight(.semibold))
+
+                    Text("\(remote.username)@\(remote.host):\(remote.port)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer()
-                StatusBadgeView(state: badgeStateForRemote(remote.id))
+                StatusBadgeView(state: badgeState)
             }
 
-            Text("\(remote.username)@\(remote.host):\(remote.port)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            infoLine(
+                title: "Remote",
+                systemImage: "folder",
+                value: remote.remoteDirectory
+            )
 
-            Text("Remote: \(remote.remoteDirectory)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("Local: \(remote.localMountPoint)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            infoLine(
+                title: "Local",
+                systemImage: "internaldrive",
+                value: remote.localMountPoint
+            )
 
             if let error = status.lastError, !error.isEmpty {
                 Text(shortError(error))
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.red.opacity(0.10))
+                    )
             }
 
-            HStack(spacing: 10) {
-                Button("Connect") {
-                    onConnect(remote.id)
-                }
-                .disabled(!status.canConnect)
-                .accessibilityLabel("Connect to \(remote.displayName)")
+            HStack(spacing: 8) {
+                primaryActionButton(for: remote, status: status)
 
-                Button("Disconnect") {
-                    onDisconnect(remote.id)
+                if isSelected {
+                    Label("Selected", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.blue)
                 }
-                .disabled(!status.canDisconnect)
-                .accessibilityLabel("Disconnect from \(remote.displayName)")
+
+                Spacer(minLength: 0)
             }
         }
-        .padding(.vertical, 6)
+        .padding(14)
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture {
+            selectedRemoteID = remote.id
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    isSelected
+                        ? Color.blue.opacity(0.12)
+                        : Color(NSColor.controlBackgroundColor).opacity(0.74)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(
+                    isSelected
+                        ? Color.blue.opacity(0.38)
+                        : badgeStateOutlineColor(badgeState),
+                    lineWidth: 1
+                )
+        )
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -104,6 +141,82 @@ struct RemotesListView: View {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func status(for remoteID: UUID) -> RemoteStatus {
         statuses[remoteID] ?? .initial
+    }
+
+    @ViewBuilder
+    private func primaryActionButton(for remote: RemoteConfig, status: RemoteStatus) -> some View {
+        switch status.state {
+        case .connected:
+            Button {
+                onDisconnect(remote.id)
+            } label: {
+                Label("Disconnect", systemImage: "bolt.slash.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .controlSize(.small)
+            .accessibilityLabel("Disconnect from \(remote.displayName)")
+        case .connecting:
+            Label("Connecting", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.blue)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.blue.opacity(0.12))
+                )
+        case .disconnecting:
+            Label("Disconnecting", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.orange.opacity(0.12))
+                )
+        case .disconnected, .error:
+            Button {
+                onConnect(remote.id)
+            } label: {
+                Label("Connect", systemImage: "bolt.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .controlSize(.small)
+            .disabled(!status.canConnect)
+            .accessibilityLabel("Connect to \(remote.displayName)")
+        }
+    }
+
+    private func infoLine(title: String, systemImage: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .labelStyle(.titleAndIcon)
+
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(.primary.opacity(0.82))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func badgeStateOutlineColor(_ state: RemoteStatusBadgeState) -> Color {
+        switch state {
+        case .connected:
+            return Color.green.opacity(0.22)
+        case .reconnecting, .connecting, .disconnecting:
+            return Color.orange.opacity(0.22)
+        case .error:
+            return Color.red.opacity(0.24)
+        case .disconnected:
+            return Color.primary.opacity(0.08)
+        }
     }
 }
 
