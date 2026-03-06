@@ -1233,7 +1233,7 @@ final class RemotesViewModel: ObservableObject {
         }
 
         let existingState = status(for: remoteID).state
-        if existingState == .connecting || existingState == .connected {
+        if !Self.shouldStartConnectOperation(from: existingState) {
             return
         }
 
@@ -1391,7 +1391,7 @@ final class RemotesViewModel: ObservableObject {
         }
 
         let existingState = status(for: remoteID).state
-        if existingState == .disconnected || existingState == .disconnecting {
+        if !Self.shouldStartDisconnectOperation(from: existingState) {
             return
         }
 
@@ -2489,13 +2489,19 @@ final class RemotesViewModel: ObservableObject {
                 return
             }
 
-            let status = RemoteStatus(
-                state: .disconnected,
-                mountedPath: nil,
-                lastError: "Connection reset after timeout.",
-                updatedAt: Date()
+            let refreshQueuedAt = Date()
+            self.logMountCall(op: "refreshStatus", remoteID: remoteID, operationID: nil, queuedAt: refreshQueuedAt)
+            let refreshed = await self.mountManager.refreshStatus(
+                remote: remote,
+                queuedAt: refreshQueuedAt,
+                operationID: nil
             )
-            self.setStatus(status, for: remoteID)
+
+            guard self.remoteOperations[remoteID] == nil else {
+                return
+            }
+
+            self.setStatus(Self.statusAfterTimeoutCleanup(refreshed), for: remoteID)
         }
     }
 
@@ -2659,6 +2665,32 @@ final class RemotesViewModel: ObservableObject {
             && (newTrigger == .recovery || newTrigger == .startup)
             && (existingIntent == .connect || existingIntent == .refresh)
             && elapsedSeconds >= thresholdSeconds
+    }
+
+    nonisolated static func shouldStartConnectOperation(from currentState: RemoteConnectionState) -> Bool {
+        currentState != .connected
+    }
+
+    nonisolated static func shouldStartDisconnectOperation(from currentState: RemoteConnectionState) -> Bool {
+        currentState != .disconnected
+    }
+
+    nonisolated static func statusAfterTimeoutCleanup(_ refreshed: RemoteStatus) -> RemoteStatus {
+        if refreshed.state == .disconnected {
+            return RemoteStatus(
+                state: .disconnected,
+                mountedPath: nil,
+                lastError: "Connection reset after timeout.",
+                updatedAt: Date()
+            )
+        }
+
+        return RemoteStatus(
+            state: refreshed.state,
+            mountedPath: refreshed.mountedPath,
+            lastError: refreshed.lastError,
+            updatedAt: refreshed.updatedAt
+        )
     }
 
     nonisolated static func watchdogTimeoutMessage(

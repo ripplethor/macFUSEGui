@@ -263,6 +263,49 @@ final class RemotesViewModelHelpersTests: XCTestCase {
         )
     }
 
+    func testConnectOperationMayRestartFromConnectingState() {
+        XCTAssertTrue(RemotesViewModel.shouldStartConnectOperation(from: .connecting))
+        XCTAssertTrue(RemotesViewModel.shouldStartConnectOperation(from: .error))
+        XCTAssertFalse(RemotesViewModel.shouldStartConnectOperation(from: .connected))
+    }
+
+    func testDisconnectOperationMayRestartFromDisconnectingState() {
+        XCTAssertTrue(RemotesViewModel.shouldStartDisconnectOperation(from: .disconnecting))
+        XCTAssertTrue(RemotesViewModel.shouldStartDisconnectOperation(from: .error))
+        XCTAssertFalse(RemotesViewModel.shouldStartDisconnectOperation(from: .disconnected))
+    }
+
+    func testTimeoutCleanupStatusKeepsActualMountedStateWhenCleanupDidNotFinish() {
+        let refreshed = RemoteStatus(
+            state: .connected,
+            mountedPath: "/tmp/live-mount",
+            lastError: nil,
+            updatedAt: Date(timeIntervalSince1970: 100)
+        )
+
+        let status = RemotesViewModel.statusAfterTimeoutCleanup(refreshed)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, "/tmp/live-mount")
+        XCTAssertNil(status.lastError)
+        XCTAssertEqual(status.updatedAt, Date(timeIntervalSince1970: 100))
+    }
+
+    func testTimeoutCleanupStatusAnnotatesSuccessfulResetOnlyWhenUnmounted() {
+        let refreshed = RemoteStatus(
+            state: .disconnected,
+            mountedPath: nil,
+            lastError: nil,
+            updatedAt: Date(timeIntervalSince1970: 200)
+        )
+
+        let status = RemotesViewModel.statusAfterTimeoutCleanup(refreshed)
+
+        XCTAssertEqual(status.state, .disconnected)
+        XCTAssertEqual(status.lastError, "Connection reset after timeout.")
+        XCTAssertNotEqual(status.updatedAt, Date(timeIntervalSince1970: 200))
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func makeRemote(name: String, autoConnect: Bool) -> RemoteConfig {
         RemoteConfig(
