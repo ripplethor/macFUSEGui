@@ -59,7 +59,7 @@ final class KeychainService: KeychainServiceProtocol {
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     func savePassword(remoteID: String, password: String) throws {
         guard password.data(using: .utf8) != nil else {
-            throw AppError.keychainError("Failed to convert password to data")
+            throw AppError.keychainError(L10n.tr("Failed to convert password to data."))
         }
 
         try withAggregateLock {
@@ -135,10 +135,10 @@ final class KeychainService: KeychainServiceProtocol {
             return nil
         }
         guard status == errSecSuccess else {
-            throw AppError.keychainError("Failed to read keychain item (\(status))")
+            throw AppError.keychainError(L10n.format("Failed to read keychain item (%lld).", Int64(status)))
         }
         guard let data = result as? Data else {
-            throw AppError.keychainError("Invalid password data in keychain")
+            throw AppError.keychainError(L10n.tr("Invalid password data in Keychain."))
         }
         if data.isEmpty {
             return [:]
@@ -146,7 +146,7 @@ final class KeychainService: KeychainServiceProtocol {
         do {
             return try JSONDecoder().decode([String: String].self, from: data)
         } catch {
-            throw AppError.keychainError("Failed to decode keychain password map")
+            throw AppError.keychainError(L10n.tr("Failed to decode Keychain password map."))
         }
     }
 
@@ -177,20 +177,20 @@ final class KeychainService: KeychainServiceProtocol {
         if insertStatus == errSecDuplicateItem {
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary)
             guard updateStatus == errSecSuccess else {
-                throw AppError.keychainError("Failed to update keychain item (\(updateStatus))")
+                throw AppError.keychainError(L10n.format("Failed to update Keychain item (%lld).", Int64(updateStatus)))
             }
             return
         }
         if insertStatus == errSecInteractionNotAllowed {
-            throw AppError.keychainError("Keychain is locked. Unlock macOS and retry.")
+            throw AppError.keychainError(L10n.tr("Keychain is locked. Unlock macOS and retry."))
         }
-        throw AppError.keychainError("Failed to add keychain item (\(insertStatus))")
+        throw AppError.keychainError(L10n.format("Failed to add Keychain item (%lld).", Int64(insertStatus)))
     }
 
     private func deleteAggregate() throws {
         let status = SecItemDelete(authenticationScopedQuery(aggregateQuery(), allowUserInteraction: false) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw AppError.keychainError("Failed to delete keychain item (\(status))")
+            throw AppError.keychainError(L10n.format("Failed to delete Keychain item (%lld).", Int64(status)))
         }
     }
 

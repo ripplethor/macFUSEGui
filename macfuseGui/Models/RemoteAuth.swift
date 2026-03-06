@@ -21,9 +21,9 @@ enum RemoteAuth: String, Codable, CaseIterable, Hashable, Identifiable, Sendable
     var displayName: String {
         switch self {
         case .privateKey:
-            return "SSH Private Key"
+            return L10n.tr("SSH Private Key")
         case .password:
-            return "Password"
+            return L10n.tr("Password")
         }
     }
 

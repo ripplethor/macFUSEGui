@@ -40,7 +40,7 @@ final class RemoteEditorViewModel: ObservableObject {
             if !validationErrors.isEmpty {
                 return .failure(.validationFailed(validationErrors))
             }
-            return .failure(.unknown("Save is already in progress."))
+            return .failure(.unknown(L10n.tr("Save is already in progress.")))
         }
 
         isSaving = true

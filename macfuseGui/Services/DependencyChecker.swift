@@ -18,7 +18,7 @@ struct DependencyStatus: Sendable {
     // Convenience for single Text rendering. Callers can use `issues` directly for list UIs.
     var userFacingMessage: String {
         if issues.isEmpty {
-            return "All dependencies are available."
+            return L10n.tr("All dependencies are available.")
         }
         return issues.joined(separator: "\n")
     }
@@ -62,24 +62,24 @@ final class DependencyChecker: DependencyChecking {
         let sshfsPath = resolveSSHFSPath(override: sshfsOverride)
         if sshfsPath == nil {
             issues.append(
-                "sshfs is not installed. Install with: brew install sshfs-mac"
+                L10n.tr("sshfs is not installed. Install with: brew install sshfs-mac")
             )
         }
 
         let macfusePath = "/Library/Filesystems/macfuse.fs"
         if !fileManager.fileExists(atPath: macfusePath) {
             issues.append(
-                "macFUSE is not installed. Install with: brew install --cask macfuse"
+                L10n.tr("macFUSE is not installed. Install with: brew install --cask macfuse")
             )
         }
 
         // Defensive checks for expected macOS base-system tools.
         if !fileManager.isExecutableFile(atPath: "/usr/bin/ssh") {
-            issues.append("ssh is missing at /usr/bin/ssh.")
+            issues.append(L10n.tr("ssh is missing at /usr/bin/ssh."))
         }
 
         if !fileManager.isExecutableFile(atPath: "/usr/bin/sftp") {
-            issues.append("sftp is missing at /usr/bin/sftp.")
+            issues.append(L10n.tr("sftp is missing at /usr/bin/sftp."))
         }
 
         return DependencyStatus(

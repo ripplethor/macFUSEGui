@@ -163,7 +163,7 @@ actor RemoteBrowserSessionManager {
             isStale: true,
             isConfirmedEmpty: false,
             health: missingSessionHealth(),
-            message: "Browser session closed. Re-open the browser.",
+            message: L10n.tr("Browser session closed. Re-open the browser."),
             generatedAt: Date(),
             // No cached entries are returned for missing-session snapshots.
             fromCache: false,
@@ -177,7 +177,7 @@ actor RemoteBrowserSessionManager {
         BrowserConnectionHealth(
             state: .closed,
             retryCount: 0,
-            lastError: "Browser session closed",
+            lastError: L10n.tr("Browser session closed"),
             lastSuccessAt: nil,
             lastLatencyMs: nil,
             updatedAt: Date()

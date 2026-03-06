@@ -242,7 +242,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
 
         if status != 0 {
             let timeoutSeconds = Int(timeout)
-            let message = errorPtr.map { String(cString: $0) } ?? "libssh2 keepalive failed with status \(status) after \(timeoutSeconds)s."
+            let message = errorPtr.map { String(cString: $0) } ?? L10n.format("libssh2 keepalive failed with status %lld after %llds.", Int64(status), Int64(timeoutSeconds))
             throw AppError.remoteBrowserError(message)
         }
     }
@@ -254,13 +254,13 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
         switch remote.authMode {
         case .password:
             guard let password, !password.isEmpty else {
-                throw AppError.remoteBrowserError("Password is required for remote browsing.")
+                throw AppError.remoteBrowserError(L10n.tr("Password is required for remote browsing."))
             }
             return (password, nil)
         case .privateKey:
             guard let key = remote.privateKeyPath?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !key.isEmpty else {
-                throw AppError.remoteBrowserError("Private key path is required for key-based remote browsing.")
+                throw AppError.remoteBrowserError(L10n.tr("Private key path is required for key-based remote browsing."))
             }
             return (nil, key)
         }
@@ -306,7 +306,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
 
         guard status == 0, let resolved = handle else {
             let timeoutSeconds = Int(timeout)
-            let message = errorPtr.map { String(cString: $0) } ?? "Failed to open libssh2 browser session within \(timeoutSeconds)s."
+            let message = errorPtr.map { String(cString: $0) } ?? L10n.format("Failed to open libssh2 browser session within %llds.", Int64(timeoutSeconds))
             throw AppError.remoteBrowserError(message)
         }
 
@@ -349,7 +349,7 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
                 message = String(cString: errorPtr)
             } else {
                 let timeoutSeconds = Int(timeout)
-                message = "libssh2 browse failed with status \(status) on path \(path) after \(timeoutSeconds)s."
+                message = L10n.format("libssh2 browse failed with status %lld on path %@ after %llds.", Int64(status), path, Int64(timeoutSeconds))
             }
             throw AppError.remoteBrowserError(message)
         }

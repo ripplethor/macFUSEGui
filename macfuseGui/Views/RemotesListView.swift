@@ -90,7 +90,7 @@ struct RemotesListView: View {
                 primaryActionButton(for: remote, status: status)
 
                 if isSelected {
-                    Label("Selected", systemImage: "checkmark.circle.fill")
+                    Label(L10n.tr("Selected"), systemImage: "checkmark.circle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.blue)
                 }
@@ -155,9 +155,9 @@ struct RemotesListView: View {
             .buttonStyle(.borderedProminent)
             .tint(.orange)
             .controlSize(.small)
-            .accessibilityLabel("Disconnect from \(remote.displayName)")
+            .accessibilityLabel(L10n.format("Disconnect from %@", remote.displayName))
         case .connecting:
-            Label("Connecting", systemImage: "arrow.triangle.2.circlepath")
+            Label(L10n.tr("Connecting"), systemImage: "arrow.triangle.2.circlepath")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.blue)
                 .padding(.horizontal, 10)
@@ -167,7 +167,7 @@ struct RemotesListView: View {
                         .fill(Color.blue.opacity(0.12))
                 )
         case .disconnecting:
-            Label("Disconnecting", systemImage: "arrow.triangle.2.circlepath")
+            Label(L10n.tr("Disconnecting"), systemImage: "arrow.triangle.2.circlepath")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.orange)
                 .padding(.horizontal, 10)
@@ -186,13 +186,13 @@ struct RemotesListView: View {
             .tint(.blue)
             .controlSize(.small)
             .disabled(!status.canConnect)
-            .accessibilityLabel("Connect to \(remote.displayName)")
+            .accessibilityLabel(L10n.format("Connect to %@", remote.displayName))
         }
     }
 
     private func infoLine(title: String, systemImage: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Label(title, systemImage: systemImage)
+            Label(L10n.tr(title), systemImage: systemImage)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .labelStyle(.titleAndIcon)

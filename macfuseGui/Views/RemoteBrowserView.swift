@@ -134,7 +134,7 @@ struct RemoteBrowserView: View {
                     .buttonStyle(.plain)
                 }
                 if viewModel.favorites.isEmpty {
-                    Text("No favorites")
+                    Text(L10n.tr("No favorites"))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -147,7 +147,7 @@ struct RemoteBrowserView: View {
                     .buttonStyle(.plain)
                 }
                 if viewModel.recents.isEmpty {
-                    Text("No recents")
+                    Text(L10n.tr("No recents"))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -176,7 +176,7 @@ struct RemoteBrowserView: View {
                 } label: {
                     Image(systemName: viewModel.isCurrentPathFavorite ? "star.fill" : "star")
                 }
-                .help(viewModel.isCurrentPathFavorite ? "Remove favorite" : "Add favorite")
+                .help(viewModel.isCurrentPathFavorite ? L10n.tr("Remove favorite") : L10n.tr("Add favorite"))
 
                 Button("Refresh") {
                     Task { await viewModel.refresh() }
@@ -222,11 +222,11 @@ struct RemoteBrowserView: View {
         if !viewModel.shouldShowDegradedNoDataState && (viewModel.isRecovering || viewModel.viewState == .degradedWithCache) {
             HStack(spacing: 8) {
                 Image(systemName: "wifi.exclamationmark")
-                Text(viewModel.statusMessage ?? "Connection lost. Reconnecting…")
+                Text(viewModel.statusMessage ?? L10n.tr("Connection lost. Reconnecting…"))
                     .lineLimit(1)
                 Spacer()
                 if viewModel.health.retryCount > 0 {
-                    Text("Attempt \(viewModel.health.retryCount)")
+                    Text(L10n.format("Attempt %lld", Int64(viewModel.health.retryCount)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -251,7 +251,7 @@ struct RemoteBrowserView: View {
                     .foregroundStyle(.secondary)
                 Text("This folder is empty")
                     .font(.headline)
-                Text("No subfolders were found in \(viewModel.currentPath).")
+                Text(L10n.format("No subfolders were found in %@.", viewModel.currentPath))
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -264,7 +264,7 @@ struct RemoteBrowserView: View {
                     .foregroundStyle(.yellow)
                 Text("Connection is degraded")
                     .font(.headline)
-                Text(viewModel.statusMessage ?? "Retry to reload this path.")
+                Text(viewModel.statusMessage ?? L10n.tr("Retry to reload this path."))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -393,7 +393,7 @@ struct RemoteBrowserView: View {
 
     private static func dateText(_ value: Date?) -> String {
         guard let value else {
-            return "-"
+            return L10n.tr("-")
         }
         return dateFormatter.string(from: value)
     }

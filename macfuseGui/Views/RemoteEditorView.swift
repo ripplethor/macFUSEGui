@@ -64,8 +64,8 @@ struct RemoteEditorView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close without saving")
-            .help("Close without saving")
+            .accessibilityLabel(L10n.tr("Close without saving"))
+            .help(L10n.tr("Close without saving"))
             .padding(.top, 12)
             .padding(.trailing, 12)
         }
@@ -85,7 +85,7 @@ struct RemoteEditorView: View {
                 } else {
                     VStack(spacing: 12) {
                         ProgressView()
-                        Text("Preparing browser session…")
+                        Text(L10n.tr("Preparing browser session…"))
                     }
                 }
             }
@@ -144,7 +144,7 @@ struct RemoteEditorView: View {
 
                 HStack(spacing: 8) {
                     editorChip(
-                        text: canBrowseRemote ? "Browser Ready" : "Needs Host + User",
+                        text: canBrowseRemote ? L10n.tr("Browser Ready") : L10n.tr("Needs Host + User"),
                         systemImage: canBrowseRemote ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
                         tint: canBrowseRemote ? .green : .orange
                     )
@@ -504,14 +504,14 @@ struct RemoteEditorView: View {
     }
 
     private var editorTitle: String {
-        viewModel.isEditingExistingRemote ? "Edit Remote" : "Add Remote"
+        viewModel.isEditingExistingRemote ? L10n.tr("Edit Remote") : L10n.tr("Add Remote")
     }
 
     private var editorSubtitle: String {
         if viewModel.isEditingExistingRemote {
-            return "Refine the connection details, mount paths, and launch behavior for an existing SSHFS profile."
+            return L10n.tr("Refine the connection details, mount paths, and launch behavior for an existing SSHFS profile.")
         }
-        return "Create a polished remote profile with the right auth flow, Finder mount target, and startup behavior from the start."
+        return L10n.tr("Create a polished remote profile with the right auth flow, Finder mount target, and startup behavior from the start.")
     }
 
     private var connectionIdentitySummary: String {
@@ -519,7 +519,7 @@ struct RemoteEditorView: View {
         let username = viewModel.draft.username.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !host.isEmpty || !username.isEmpty else {
-            return "Endpoint not configured"
+            return L10n.tr("Endpoint not configured")
         }
 
         if !host.isEmpty, !username.isEmpty {
@@ -531,48 +531,48 @@ struct RemoteEditorView: View {
 
     private var remoteDirectorySummary: String {
         let trimmed = viewModel.draft.remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Remote directory not set" : trimmed
+        return trimmed.isEmpty ? L10n.tr("Remote directory not set") : trimmed
     }
 
     private var localMountPointSummary: String {
         let trimmed = viewModel.draft.localMountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Local mount point not set" : trimmed
+        return trimmed.isEmpty ? L10n.tr("Local mount point not set") : trimmed
     }
 
     private var actionSummaryTitle: String {
         if viewModel.isTestingConnection {
-            return "Connection test in progress"
+            return L10n.tr("Connection test in progress")
         }
         if viewModel.isSaving {
-            return "Saving remote profile…"
+            return L10n.tr("Saving remote profile…")
         }
         if !viewModel.validationErrors.isEmpty {
-            return "Validation needs attention"
+            return L10n.tr("Validation needs attention")
         }
         if viewModel.testResultIsSuccess {
-            return "Ready to save"
+            return L10n.tr("Ready to save")
         }
-        return "Review and save"
+        return L10n.tr("Review and save")
     }
 
     private var actionSummaryMessage: String {
         if viewModel.isTestingConnection {
-            return "Wait for the auth and transport checks to finish before changing the draft again."
+            return L10n.tr("Wait for the auth and transport checks to finish before changing the draft again.")
         }
         if viewModel.isSaving {
-            return "Persisting the remote and any credential updates now."
+            return L10n.tr("Persisting the remote and any credential updates now.")
         }
         if !viewModel.validationErrors.isEmpty {
-            return "Resolve the highlighted issues above so this profile saves cleanly."
+            return L10n.tr("Resolve the highlighted issues above so this profile saves cleanly.")
         }
         if let testMessage = viewModel.testResultMessage, !testMessage.isEmpty {
             return testMessage
         }
-        return "Use Test Connection if you want a dry run first, or save immediately when the profile looks correct."
+        return L10n.tr("Use Test Connection if you want a dry run first, or save immediately when the profile looks correct.")
     }
 
     private var saveButtonTitle: String {
-        viewModel.isEditingExistingRemote ? "Save Changes" : "Add Remote"
+        viewModel.isEditingExistingRemote ? L10n.tr("Save Changes") : L10n.tr("Add Remote")
     }
 
     private func editorSectionCard<Content: View>(
@@ -606,15 +606,15 @@ struct RemoteEditorView: View {
                 .frame(width: 32, height: 32)
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(sectionLabel.uppercased())
+                    Text(L10n.tr(sectionLabel).uppercased())
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .tracking(1)
                         .foregroundStyle(accent)
 
-                    Text(title)
+                    Text(L10n.tr(title))
                         .font(.headline.weight(.semibold))
 
-                    Text(subtitle)
+                    Text(L10n.tr(subtitle))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -657,10 +657,10 @@ struct RemoteEditorView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.callout.weight(.semibold))
             content()
-            Text(detail)
+            Text(L10n.tr(detail))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -680,10 +680,10 @@ struct RemoteEditorView: View {
 
     private func infoCallout(title: String, message: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
-            Text(message)
+            Text(L10n.tr(message))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -754,7 +754,7 @@ struct RemoteEditorView: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        panel.title = "Select SSH Private Key"
+        panel.title = L10n.tr("Select SSH Private Key")
         presentOpenPanel(panel) { url in
             viewModel.draft.privateKeyPath = url.path
         }
@@ -769,9 +769,9 @@ struct RemoteEditorView: View {
         panel.allowsMultipleSelection = false
         // Avoid resolving potentially stale alias targets on network/removable volumes.
         panel.resolvesAliases = false
-        panel.title = "Select Local Mount Point"
-        panel.prompt = "Select Folder"
-        panel.message = "Choose or create a folder to use as the local SSHFS mount point."
+        panel.title = L10n.tr("Select Local Mount Point")
+        panel.prompt = L10n.tr("Select Folder")
+        panel.message = L10n.tr("Choose or create a folder to use as the local SSHFS mount point.")
         // Force a safe local start location. Relying on panel's remembered last
         // folder can hang when that location is stale/unreachable.
         panel.directoryURL = preferredLocalFolderPickerStartURL()

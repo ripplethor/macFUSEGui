@@ -244,7 +244,7 @@ final class MenuBarController: NSObject {
             recoveryIndicator: recoveryIndicator,
             reconnectingCount: reconnectingCount
         )
-        button.setAccessibilityLabel("\(appName) — \(summary.connected) connected")
+        button.setAccessibilityLabel(L10n.format("%@ — %lld connected", appName, Int64(summary.connected)))
         button.needsDisplay = true
         button.displayIfNeeded()
     }
@@ -306,21 +306,33 @@ final class MenuBarController: NSObject {
         var lines: [String] = [Self.appDisplayName()]
         if !activeOperations.isEmpty {
             let details = activeOperations
-                .map { "\(humanLabel(for: $0.state)) \($0.name) (\(elapsedText(since: $0.startedAt)))" }
+                .map { L10n.format("%@ %@ (%@)", humanLabel(for: $0.state), $0.name, elapsedText(since: $0.startedAt)) }
                 .joined(separator: " • ")
             lines.append(details)
         }
         if reconnectingCount > 0 {
-            lines.append("Reconnecting \(reconnectingCount) remote(s)")
+            lines.append(L10n.format("Reconnecting %lld remote(s)", Int64(reconnectingCount)))
         }
         if let recoveryIndicator {
             let reason = recoveryReasonLabel(recoveryIndicator.reason)
             lines.append(
-                "Recovery \(reason): pending \(recoveryIndicator.pendingRemoteCount), queued \(recoveryIndicator.scheduledReconnectCount) (\(elapsedText(since: recoveryIndicator.startedAt)))"
+                L10n.format(
+                    "Recovery %@: pending %lld, queued %lld (%@)",
+                    reason,
+                    Int64(recoveryIndicator.pendingRemoteCount),
+                    Int64(recoveryIndicator.scheduledReconnectCount),
+                    elapsedText(since: recoveryIndicator.startedAt)
+                )
             )
         }
         lines.append(
-            "Connected \(summary.connected) • Active \(summary.active) • Errors \(summary.errors) • Disconnected \(summary.disconnected)"
+            L10n.format(
+                "Connected %lld • Reconnecting %lld • Errors %lld • Disconnected %lld",
+                Int64(summary.connected),
+                Int64(summary.reconnecting),
+                Int64(summary.errors),
+                Int64(summary.disconnected)
+            )
         )
         return lines.joined(separator: "\n")
     }
@@ -334,15 +346,15 @@ final class MenuBarController: NSObject {
     private func humanLabel(for state: RemoteConnectionState) -> String {
         switch state {
         case .connecting:
-            return "Connecting"
+            return L10n.tr("Connecting")
         case .disconnecting:
-            return "Disconnecting"
+            return L10n.tr("Disconnecting")
         case .connected:
-            return "Connected"
+            return L10n.tr("Connected")
         case .disconnected:
-            return "Disconnected"
+            return L10n.tr("Disconnected")
         case .error:
-            return "Error"
+            return L10n.tr("Error")
         }
     }
 
@@ -354,9 +366,9 @@ final class MenuBarController: NSObject {
     nonisolated static func recoveryReasonDisplayText(_ reason: String) -> String {
         switch reason {
         case "wake":
-            return "after wake"
+            return L10n.tr("after wake")
         case "network-restored":
-            return "after network restore"
+            return L10n.tr("after network restore")
         default:
             return reason
         }
@@ -463,7 +475,7 @@ final class MenuBarController: NSObject {
 
             let status = self.viewModel.status(for: remote.id)
             guard status.state == .connected else {
-                self.viewModel.alertMessage = "Remote \(remote.displayName) is not connected yet."
+                self.viewModel.alertMessage = L10n.format("Remote %@ is not connected yet.", remote.displayName)
                 return
             }
 
@@ -491,7 +503,10 @@ final class MenuBarController: NSObject {
             }
 
             NSWorkspace.shared.activateFileViewerSelecting([folderURL])
-            self.viewModel.alertMessage = "\(result.message ?? "Could not open an editor.") Opened mount folder in Finder instead."
+            self.viewModel.alertMessage = L10n.format(
+                "%@ Opened mount folder in Finder instead.",
+                result.message ?? L10n.tr("Could not open an editor.")
+            )
         }
     }
 
@@ -578,6 +593,8 @@ final class MenuBarController: NSObject {
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 private struct MenuPopoverContentView: View {
+    @AppStorage("menuPopover.usesCompactRemoteRows") private var usesCompactRemoteRows = false
+
     @ObservedObject var viewModel: RemotesViewModel
     @ObservedObject var editorPluginRegistry: EditorPluginRegistry
 
@@ -607,6 +624,7 @@ private struct MenuPopoverContentView: View {
                                 remote: remote,
                                 status: viewModel.status(for: remote.id),
                                 badgeState: viewModel.statusBadgeState(for: remote.id),
+                                showsConnectionDetails: !usesCompactRemoteRows,
                                 preferredPluginDisplayName: preferredPluginDisplayName,
                                 activeEditorPlugins: activeEditorPlugins,
                                 onConnect: { onConnect(remote.id) },
@@ -653,35 +671,34 @@ private struct MenuPopoverContentView: View {
 
                 HStack(spacing: 8) {
                     Button {
+                        usesCompactRemoteRows.toggle()
+                    } label: {
+                        Image(systemName: usesCompactRemoteRows ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                    }
+                    .buttonStyle(MenuPopoverButtonStyle(kind: .neutral))
+                    .help(usesCompactRemoteRows ? L10n.tr("Show remote path details") : L10n.tr("Hide remote path details"))
+
+                    Button {
                         onRefresh()
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .buttonStyle(.bordered)
-                    .help("Refresh all remote statuses")
+                    .buttonStyle(MenuPopoverButtonStyle(kind: .neutral))
+                    .help(L10n.tr("Refresh all remote statuses"))
 
                     Button {
                         onOpenSettings()
                     } label: {
                         Image(systemName: "gearshape.fill")
                     }
-                    .buttonStyle(.bordered)
-                    .help("Open Settings")
+                    .buttonStyle(MenuPopoverButtonStyle(kind: .neutral))
+                    .help(L10n.tr("Open Settings"))
                 }
             }
 
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(minimum: 110), spacing: 8),
-                    GridItem(.flexible(minimum: 110), spacing: 8),
-                    GridItem(.flexible(minimum: 110), spacing: 8)
-                ],
-                alignment: .leading,
-                spacing: 8
-            ) {
+            HStack(spacing: 8) {
                 metricChip(title: "Connected", value: summary.connected, tint: .green)
                 metricChip(title: "Reconnecting", value: summary.reconnecting, tint: .orange)
-                metricChip(title: "Active", value: summary.active, tint: .blue)
                 metricChip(title: "Errors", value: summary.errors, tint: .red)
                 metricChip(title: "Disconnected", value: summary.disconnected, tint: .secondary)
             }
@@ -689,6 +706,7 @@ private struct MenuPopoverContentView: View {
         .padding(14)
         .background(menuSurfaceFill(accent: .blue))
         .overlay(menuSurfaceStroke())
+        .animation(.easeInOut(duration: 0.18), value: usesCompactRemoteRows)
     }
 
     @ViewBuilder
@@ -723,7 +741,12 @@ private struct MenuPopoverContentView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
                     Text(
-                        "After \(recoveryReasonLabel(recovery.reason)) · pending \(recovery.pendingRemoteCount) · queued \(recovery.scheduledReconnectCount)"
+                        L10n.format(
+                            "After %@ · pending %lld · queued %lld",
+                            recoveryReasonLabel(recovery.reason),
+                            Int64(recovery.pendingRemoteCount),
+                            Int64(recovery.scheduledReconnectCount)
+                        )
                     )
                     .font(.caption)
                     .foregroundStyle(.primary.opacity(0.82))
@@ -746,8 +769,7 @@ private struct MenuPopoverContentView: View {
                 .foregroundStyle(.secondary)
 
             Button("Open Settings", action: onOpenSettings)
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .buttonStyle(MenuPopoverButtonStyle(kind: .filled(.blue)))
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -762,15 +784,14 @@ private struct MenuPopoverContentView: View {
             } label: {
                 Label("Diagnostics", systemImage: "doc.on.doc")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(MenuPopoverButtonStyle(kind: .neutral))
 
             Button {
                 onForceResetMounts()
             } label: {
                 Label("Reset Mounts", systemImage: "wrench.and.screwdriver")
             }
-            .buttonStyle(.bordered)
-            .tint(.orange)
+            .buttonStyle(MenuPopoverButtonStyle(kind: .soft(.orange)))
 
             Spacer(minLength: 0)
 
@@ -779,8 +800,7 @@ private struct MenuPopoverContentView: View {
             } label: {
                 Label("Quit", systemImage: "xmark.circle.fill")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
+            .buttonStyle(MenuPopoverButtonStyle(kind: .filled(.red)))
             .keyboardShortcut("q", modifiers: [.command])
         }
         .padding(.horizontal, 4)
@@ -812,10 +832,11 @@ private struct MenuPopoverContentView: View {
 
     private func metricChip(title: String, value: Int, tint: Color) -> some View {
         HStack(spacing: 6) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.82)
             Text("\(value)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
@@ -871,6 +892,7 @@ private struct RemotePopoverRow: View {
     let remote: RemoteConfig
     let status: RemoteStatus
     let badgeState: RemoteStatusBadgeState
+    let showsConnectionDetails: Bool
     let preferredPluginDisplayName: String
     let activeEditorPlugins: [EditorPluginDefinition]
     let onConnect: () -> Void
@@ -894,7 +916,7 @@ private struct RemotePopoverRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: showsConnectionDetails ? 10 : 8) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(remote.displayName)
@@ -910,11 +932,13 @@ private struct RemotePopoverRow: View {
                 StatusBadgeView(state: badgeState)
             }
 
-            infoLine(title: "Remote", systemImage: "folder", value: remote.remoteDirectory)
-            infoLine(title: "Local", systemImage: "internaldrive", value: remote.localMountPoint)
+            if showsConnectionDetails {
+                infoLine(title: "Remote", systemImage: "folder", value: remote.remoteDirectory)
+                infoLine(title: "Local", systemImage: "internaldrive", value: remote.localMountPoint)
 
-            if let mountedPath = status.mountedPath, !mountedPath.isEmpty {
-                infoLine(title: "Mounted", systemImage: "checkmark.circle.fill", value: mountedPath)
+                if let mountedPath = status.mountedPath, !mountedPath.isEmpty {
+                    infoLine(title: "Mounted", systemImage: "checkmark.circle.fill", value: mountedPath)
+                }
             }
 
             if let lastError = status.lastError, !lastError.isEmpty {
@@ -939,17 +963,15 @@ private struct RemotePopoverRow: View {
                 case .none:
                     Button("Open In") {}
                         .disabled(true)
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .buttonStyle(MenuPopoverButtonStyle(kind: .neutral))
                 case .single:
                     Button {
                         onOpenInPreferredEditor()
                     } label: {
-                        Label("Open in \(singleEditorDisplayName)", systemImage: "square.and.arrow.up")
+                        Label(L10n.format("Open in %@", singleEditorDisplayName), systemImage: "square.and.arrow.up")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                        .disabled(status.state != .connected)
+                    .buttonStyle(MenuPopoverButtonStyle(kind: .neutral))
+                    .disabled(status.state != .connected)
                 case .picker:
                     Menu {
                         ForEach(activeEditorPlugins) { plugin in
@@ -958,7 +980,11 @@ private struct RemotePopoverRow: View {
                             }
                         }
                     } label: {
-                        Label("Open In", systemImage: "square.and.arrow.up")
+                        MenuPopoverButtonLabel(
+                            title: "Open In",
+                            systemImage: "square.and.arrow.up",
+                            kind: .neutral
+                        )
                     }
                     .menuStyle(.borderlessButton)
                     .disabled(status.state != .connected)
@@ -1009,9 +1035,7 @@ private struct RemotePopoverRow: View {
             } label: {
                 Label("Disconnect", systemImage: "bolt.slash.fill")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-            .controlSize(.small)
+            .buttonStyle(MenuPopoverButtonStyle(kind: .filled(.orange)))
         case .connecting:
             Label("Connecting", systemImage: "arrow.triangle.2.circlepath")
                 .font(.caption.weight(.semibold))
@@ -1038,16 +1062,14 @@ private struct RemotePopoverRow: View {
             } label: {
                 Label("Connect", systemImage: "bolt.fill")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-            .controlSize(.small)
+            .buttonStyle(MenuPopoverButtonStyle(kind: .filled(.blue)))
             .disabled(!status.canConnect)
         }
     }
 
     private func infoLine(title: String, systemImage: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Label(title, systemImage: systemImage)
+            Label(L10n.tr(title), systemImage: systemImage)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -1057,6 +1079,123 @@ private struct RemotePopoverRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private enum MenuPopoverButtonKind {
+    case neutral
+    case soft(Color)
+    case filled(Color)
+}
+
+private struct MenuPopoverButtonLabel: View {
+    let title: String
+    let systemImage: String
+    let kind: MenuPopoverButtonKind
+
+    var body: some View {
+        Label(L10n.tr(title), systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(backgroundColor)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .foregroundStyle(foregroundColor)
+    }
+
+    private var backgroundColor: Color {
+        switch kind {
+        case .neutral:
+            return Color(NSColor.controlBackgroundColor).opacity(0.96)
+        case .soft(let tint):
+            return tint.opacity(0.14)
+        case .filled(let tint):
+            return tint.opacity(0.92)
+        }
+    }
+
+    private var borderColor: Color {
+        switch kind {
+        case .neutral:
+            return Color.primary.opacity(0.12)
+        case .soft(let tint):
+            return tint.opacity(0.24)
+        case .filled(let tint):
+            return tint.opacity(0.38)
+        }
+    }
+
+    private var foregroundColor: Color {
+        switch kind {
+        case .neutral:
+            return Color.primary.opacity(0.84)
+        case .soft(let tint):
+            return tint.opacity(0.96)
+        case .filled:
+            return .white
+        }
+    }
+}
+
+private struct MenuPopoverButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let kind: MenuPopoverButtonKind
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(backgroundColor(isPressed: configuration.isPressed))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(borderColor(isPressed: configuration.isPressed), lineWidth: 1)
+            )
+            .foregroundStyle(foregroundColor(isPressed: configuration.isPressed))
+            .opacity(isEnabled ? 1 : 0.52)
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        switch kind {
+        case .neutral:
+            return Color(NSColor.controlBackgroundColor).opacity(isPressed ? 1 : 0.96)
+        case .soft(let tint):
+            return tint.opacity(isPressed ? 0.22 : 0.14)
+        case .filled(let tint):
+            return tint.opacity(isPressed ? 0.82 : 0.92)
+        }
+    }
+
+    private func borderColor(isPressed: Bool) -> Color {
+        switch kind {
+        case .neutral:
+            return Color.primary.opacity(isPressed ? 0.18 : 0.12)
+        case .soft(let tint):
+            return tint.opacity(isPressed ? 0.34 : 0.24)
+        case .filled(let tint):
+            return tint.opacity(isPressed ? 0.52 : 0.38)
+        }
+    }
+
+    private func foregroundColor(isPressed: Bool) -> Color {
+        switch kind {
+        case .neutral:
+            return Color.primary.opacity(isPressed ? 1 : 0.84)
+        case .soft(let tint):
+            return tint.opacity(isPressed ? 1 : 0.96)
+        case .filled:
+            return .white.opacity(isPressed ? 0.96 : 1)
         }
     }
 }

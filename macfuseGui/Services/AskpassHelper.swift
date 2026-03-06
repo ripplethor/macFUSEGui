@@ -57,7 +57,7 @@ final class AskpassHelper {
         let variableName = "MACFUSEGUI_ASKPASS_PASSWORD_\(variableSuffix)"
         let allowedVariableScalars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
         guard variableName.unicodeScalars.allSatisfy({ allowedVariableScalars.contains($0) }) else {
-            throw AppError.unknown("Failed to generate a safe askpass variable name.")
+            throw AppError.unknown(L10n.tr("Failed to generate a safe askpass variable name."))
         }
 
         let scriptURL = tmpDir.appendingPathComponent("askpass.sh", isDirectory: false)
@@ -72,7 +72,7 @@ final class AskpassHelper {
             contents: nil,
             attributes: [.posixPermissions: 0o600]
         ) else {
-            throw AppError.processFailure("Failed to create askpass helper script.")
+            throw AppError.processFailure(L10n.tr("Failed to create askpass helper script."))
         }
 
         do {
@@ -81,10 +81,10 @@ final class AskpassHelper {
             if let data = script.data(using: .utf8) {
                 try handle.write(contentsOf: data)
             } else {
-                throw AppError.processFailure("Failed to encode askpass helper script.")
+                throw AppError.processFailure(L10n.tr("Failed to encode askpass helper script."))
             }
         } catch {
-            throw AppError.processFailure("Failed to write askpass helper script: \(error.localizedDescription)")
+            throw AppError.processFailure(L10n.format("Failed to write askpass helper script: %@", error.localizedDescription))
         }
 
         try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: scriptURL.path)

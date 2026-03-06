@@ -161,7 +161,7 @@ final class EditorOpenService {
                         launchedPluginDisplayName: plugin.displayName,
                         mode: mode,
                         pluginResults: pluginResults,
-                        message: "Opened \(remoteName) in \(plugin.displayName)."
+                        message: L10n.format("Opened %@ in %@.", remoteName, plugin.displayName)
                     )
                 }
             }
@@ -181,7 +181,7 @@ final class EditorOpenService {
             launchedPluginDisplayName: nil,
             mode: mode,
             pluginResults: pluginResults,
-            message: "Unable to open \(remoteName) with active editor plugins."
+            message: L10n.format("Unable to open %@ with active editor plugins.", remoteName)
         )
     }
 
@@ -211,10 +211,10 @@ final class EditorOpenService {
     private func noPluginMessage(for mode: EditorOpenMode) -> String {
         switch mode {
         case .preferredWithFallback:
-            return "No active editor plugins. Enable one in Settings > Editor Plugins."
+            return L10n.tr("No active editor plugins. Enable one in Settings > Editor Plugins.")
         case .explicit(let pluginID):
             let displayName = pluginRegistry.plugin(id: pluginID)?.displayName ?? pluginID
-            return "Editor plugin '\(displayName)' is not active."
+            return L10n.format("Editor plugin '%@' is not active.", displayName)
         }
     }
 

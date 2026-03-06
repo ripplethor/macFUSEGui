@@ -64,6 +64,9 @@
 		E4F86048F3B59B6F34ED5D36 /* RemoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B40D202543074E8C13B9052 /* RemoteBrowserView.swift */; };
 		E657E9F6C0A3373CD7B29B31 /* UnmountServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C50FBC2DF7C3C520F9D2E3 /* UnmountServiceTests.swift */; };
 		ED4E67F8CBE6DCEBB00FFFF5 /* RemoteBrowserViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6FB986B4AC914C9EF18E4E2 /* RemoteBrowserViewModel.swift */; };
+		F2A4C6E8B0D1122334455668 /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A4C6E8B0D1122334455667 /* L10n.swift */; };
+		F2A4C6E8B0D112233445566A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F2A4C6E8B0D1122334455669 /* Localizable.xcstrings */; };
+		F2A4C6E8B0D112233445566C /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A4C6E8B0D112233445566B /* LocalizationTests.swift */; };
 		F93DDB9D2D08ACEA0EDEBD5D /* UnmountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1397ABA1500C2F6FAA5A943C /* UnmountService.swift */; };
 		FAB35C574ABD1A056E4A99A8 /* RemoteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06148311183BDBFC0D84CE6B /* RemoteStoreTests.swift */; };
 /* End PBXBuildFile section */
@@ -136,6 +139,9 @@
 		DDF9ABAEACCB5A16404C9B83 /* LibSSH2SFTPTransport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibSSH2SFTPTransport.swift; path = Browser/LibSSH2SFTPTransport.swift; sourceTree = "<group>"; };
 		E0005112E3D4EDABBAF4A9D7 /* RemoteDirectoryParserTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryParserTests.swift; sourceTree = "<group>"; };
 		F1A2B3C4D5E6F708192A3B4D /* LaunchAtLoginServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginServiceTests.swift; sourceTree = "<group>"; };
+		F2A4C6E8B0D1122334455667 /* L10n.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = L10n.swift; sourceTree = "<group>"; };
+		F2A4C6E8B0D1122334455669 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		F2A4C6E8B0D112233445566B /* LocalizationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
 		F005AF400340F242FC36A6D3 /* macfuseGuiApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = macfuseGuiApp.swift; sourceTree = "<group>"; };
 		F6FB986B4AC914C9EF18E4E2 /* RemoteBrowserViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteBrowserViewModel.swift; sourceTree = "<group>"; };
 		F89221BEA6FA740F83907CDB /* MountCommandBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MountCommandBuilder.swift; sourceTree = "<group>"; };
@@ -168,6 +174,7 @@
 			children = (
 				669A942DC63A9D80565BF29E /* AppDelegate.swift */,
 				14D6B5E59F24E237BE9A2048 /* AppEnvironment.swift */,
+				F2A4C6E8B0D1122334455667 /* L10n.swift */,
 				CDCD710A9872EC06F8D3E842 /* SettingsWindowController.swift */,
 				F005AF400340F242FC36A6D3 /* macfuseGuiApp.swift */,
 			);
@@ -295,6 +302,7 @@
 				0BB1B2C3D4E5F60718293B45 /* EditorOpenServiceTests.swift */,
 				0BB1B2C3D4E5F60718293B44 /* EditorPluginRegistryTests.swift */,
 				BDC2BE588D03C7E5B66BEBBE /* KeychainServiceTests.swift */,
+				F2A4C6E8B0D112233445566B /* LocalizationTests.swift */,
 				B4C5D6E7F809123456789AB1 /* MenuBarControllerFormattingTests.swift */,
 				CA1CEF0B82125E597B943366 /* MountArgBuilderTests.swift */,
 				62E8919B0F450B3D28E534FE /* MountStateParserTests.swift */,
@@ -331,6 +339,7 @@
 				976EB96BF9E5A1C8D50860B3 /* Assets.xcassets */,
 				0CC1D2E3F4A5061728394A51 /* EditorPlugins */,
 				87DAF630CAB61DDD67C4626B /* Info.plist */,
+				F2A4C6E8B0D1122334455669 /* Localizable.xcstrings */,
 			);
 			name = Resources;
 			path = Resources;
@@ -392,6 +401,13 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				es,
+				fr,
+				ja,
+				ko,
+				"pt-BR",
+				"zh-Hans",
 			);
 			mainGroup = 51AD3DC3E7EAF0796052CE6E;
 			minimizedProjectReferenceProxies = 0;
@@ -420,6 +436,7 @@
 			files = (
 				1C3944B08AAB503DAB4380E1 /* Assets.xcassets in Resources */,
 				0CC1D2E3F4A5061728394A50 /* EditorPlugins in Resources */,
+				F2A4C6E8B0D112233445566A /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -434,6 +451,7 @@
 				0AA1B2C3D4E5F60718293A45 /* EditorOpenServiceTests.swift in Sources */,
 				0AA1B2C3D4E5F60718293A44 /* EditorPluginRegistryTests.swift in Sources */,
 				424336D6132B83926F3E3AA5 /* KeychainServiceTests.swift in Sources */,
+				F2A4C6E8B0D112233445566C /* LocalizationTests.swift in Sources */,
 				B4C5D6E7F809123456789AB2 /* MenuBarControllerFormattingTests.swift in Sources */,
 				9BF77D70B94A2397034BF606 /* MountArgBuilderTests.swift in Sources */,
 				5D8518327271BCFD0F9C51D4 /* MountStateParserTests.swift in Sources */,
@@ -453,6 +471,7 @@
 			files = (
 				39B616918869CCCCD2B7DD83 /* AppDelegate.swift in Sources */,
 				B8C805F60A25132645BF0868 /* AppEnvironment.swift in Sources */,
+				F2A4C6E8B0D1122334455668 /* L10n.swift in Sources */,
 				883394C334D4AF8AB841FBD7 /* SettingsWindowController.swift in Sources */,
 				68FE10FA44D00152E0BB61FB /* macfuseGuiApp.swift in Sources */,
 				AE2E6207DCB2A8676E70F39E /* MenuBarController.swift in Sources */,
@@ -577,7 +596,7 @@
 				STRIP_INSTALLED_PRODUCT = YES;
 				STRIP_SWIFT_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
 			};
@@ -682,7 +701,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
 			};

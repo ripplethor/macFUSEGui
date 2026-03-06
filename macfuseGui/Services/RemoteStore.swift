@@ -70,9 +70,9 @@ final class JSONRemoteStore: RemoteStore {
             let data = try Data(contentsOf: storageURL)
             return try decoder.decode([RemoteConfig].self, from: data)
         } catch let decodingError as DecodingError {
-            throw AppError.persistenceError("Corrupt remotes file: \(decodingError.localizedDescription)")
+            throw AppError.persistenceError(L10n.format("Corrupt remotes file: %@", decodingError.localizedDescription))
         } catch {
-            throw AppError.persistenceError("Failed to read remotes file: \(error.localizedDescription)")
+            throw AppError.persistenceError(L10n.format("Failed to read remotes file: %@", error.localizedDescription))
         }
     }
 
@@ -89,11 +89,11 @@ final class JSONRemoteStore: RemoteStore {
             let writtenData = try Data(contentsOf: storageURL)
             _ = try decoder.decode([RemoteConfig].self, from: writtenData)
         } catch let encodingError as EncodingError {
-            throw AppError.persistenceError("Failed to encode remotes: \(encodingError.localizedDescription)")
+            throw AppError.persistenceError(L10n.format("Failed to encode remotes: %@", encodingError.localizedDescription))
         } catch let decodingError as DecodingError {
-            throw AppError.persistenceError("Saved remotes file is unreadable: \(decodingError.localizedDescription)")
+            throw AppError.persistenceError(L10n.format("Saved remotes file is unreadable: %@", decodingError.localizedDescription))
         } catch {
-            throw AppError.persistenceError("Failed to save remotes: \(error.localizedDescription)")
+            throw AppError.persistenceError(L10n.format("Failed to save remotes: %@", error.localizedDescription))
         }
     }
 
@@ -117,7 +117,7 @@ final class JSONRemoteStore: RemoteStore {
         let remotes = try load()
         let filtered = remotes.filter { $0.id != id }
         guard filtered.count != remotes.count else {
-            throw AppError.persistenceError("Remote \(id.uuidString) was not found.")
+            throw AppError.persistenceError(L10n.format("Remote %@ was not found.", id.uuidString))
         }
         try save(filtered)
     }

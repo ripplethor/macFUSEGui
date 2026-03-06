@@ -29,52 +29,52 @@ final class ValidationService {
 
         let displayName = draft.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         if displayName.isEmpty {
-            errors.append("Display name is required.")
+            errors.append(L10n.tr("Display name is required."))
         }
 
         let host = draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
         if host.isEmpty {
-            errors.append("Host/IP is required.")
+            errors.append(L10n.tr("Host/IP is required."))
         } else {
             if containsUnsafeControlCharacters(host) {
-                errors.append("Host/IP contains invalid control characters.")
+                errors.append(L10n.tr("Host/IP contains invalid control characters."))
             } else if isBareIPv6HostLiteral(host) {
-                errors.append("IPv6 addresses must be wrapped in brackets, for example [::1].")
+                errors.append(L10n.tr("IPv6 addresses must be wrapped in brackets, for example [::1]."))
             } else if !isSupportedHost(host) {
                 // Host syntax allows standard DNS-like names and bracketed IPv6 literals.
-                errors.append("Host/IP contains unsupported characters.")
+                errors.append(L10n.tr("Host/IP contains unsupported characters."))
             }
         }
 
         if !(1...65535).contains(draft.port) {
-            errors.append("Port must be between 1 and 65535.")
+            errors.append(L10n.tr("Port must be between 1 and 65535."))
         }
 
         let username = draft.username.trimmingCharacters(in: .whitespacesAndNewlines)
         if username.isEmpty {
-            errors.append("Username is required.")
+            errors.append(L10n.tr("Username is required."))
         } else if username.rangeOfCharacter(from: .whitespacesAndNewlines) != nil {
-            errors.append("Username cannot contain whitespace characters.")
+            errors.append(L10n.tr("Username cannot contain whitespace characters."))
         }
 
         let remoteDirectory = draft.remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         if !isSupportedRemotePath(remoteDirectory) {
-            errors.append("Remote directory must be absolute (for example /home/user or C:/Users/User).")
+            errors.append(L10n.tr("Remote directory must be absolute (for example /home/user or C:/Users/User)."))
         } else if containsUnsafeControlCharacters(remoteDirectory) {
-            errors.append("Remote directory contains invalid control characters.")
+            errors.append(L10n.tr("Remote directory contains invalid control characters."))
         }
 
         let localMount = draft.localMountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
         if localMount.isEmpty {
-            errors.append("Local mount point is required.")
+            errors.append(L10n.tr("Local mount point is required."))
         } else if !localMount.hasPrefix("/") {
-            errors.append("Local mount point must be an absolute path.")
+            errors.append(L10n.tr("Local mount point must be an absolute path."))
         } else if containsUnsafeControlCharacters(localMount) {
-            errors.append("Local mount point contains invalid control characters.")
+            errors.append(L10n.tr("Local mount point contains invalid control characters."))
         } else {
             let normalizedMount = URL(fileURLWithPath: localMount).standardizedFileURL.path
             if normalizedMount == "/" {
-                errors.append("Local mount point cannot be '/'. Choose a subfolder.")
+                errors.append(L10n.tr("Local mount point cannot be '/'. Choose a subfolder."))
             }
             // Important: avoid synchronous file-system probes here.
             // Save/Test validation runs on MainActor, and stale FUSE mount paths can
@@ -86,26 +86,26 @@ final class ValidationService {
         case .privateKey:
             let keyPath = draft.privateKeyPath.trimmingCharacters(in: .whitespacesAndNewlines)
             if keyPath.isEmpty {
-                errors.append("Private key path is required for key authentication.")
+                errors.append(L10n.tr("Private key path is required for key authentication."))
             } else if !keyPath.hasPrefix("/") {
-                errors.append("Private key path must be an absolute path.")
+                errors.append(L10n.tr("Private key path must be an absolute path."))
             } else if containsUnsafeControlCharacters(keyPath) {
-                errors.append("Private key path contains invalid control characters.")
+                errors.append(L10n.tr("Private key path contains invalid control characters."))
             } else {
                 // This is a shallow readability/existence check at validation time only.
                 // Runtime key accessibility (for example removable/network-backed symlink targets)
                 // is still validated by connect/auth flows.
                 var isDir: ObjCBool = false
                 if !fileManager.fileExists(atPath: keyPath, isDirectory: &isDir) || isDir.boolValue {
-                    errors.append("Private key file does not exist.")
+                    errors.append(L10n.tr("Private key file does not exist."))
                 }
                 if !fileManager.isReadableFile(atPath: keyPath) {
-                    errors.append("Private key file is not readable.")
+                    errors.append(L10n.tr("Private key file is not readable."))
                 }
             }
         case .password:
             if !hasStoredPassword && draft.password.isEmpty {
-                errors.append("Password is required for password authentication.")
+                errors.append(L10n.tr("Password is required for password authentication."))
             }
         }
 

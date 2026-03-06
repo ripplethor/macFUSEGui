@@ -74,7 +74,7 @@ struct SettingsRootView: View {
                 pendingRemoteDeletion = nil
             }
         } message: { deletion in
-            Text("Delete '\(deletion.displayName)'? This removes saved settings and stored credentials.")
+            Text(L10n.format("Delete '%@'? This removes saved settings and stored credentials.", deletion.displayName))
         }
         .onReceive(NotificationCenter.default.publisher(for: .forceQuitRequested)) { _ in
             activeEditorSession = nil
@@ -115,7 +115,7 @@ struct SettingsRootView: View {
 
                     HStack(spacing: 8) {
                         settingsMetricChip(
-                            text: "\(viewModel.remotes.count) Remotes",
+                            text: L10n.format("%lld Remotes", Int64(viewModel.remotes.count)),
                             systemImage: "server.rack",
                             tint: .blue
                         )
@@ -268,7 +268,7 @@ struct SettingsRootView: View {
                                 .font(.title2.weight(.bold))
                             if remote.autoConnectOnLaunch {
                                 settingsMetricChip(
-                                    text: "Auto Connect",
+                                    text: L10n.tr("Auto Connect"),
                                     systemImage: "bolt.fill",
                                     tint: .orange
                                 )
@@ -308,8 +308,8 @@ struct SettingsRootView: View {
                         detailField(
                             title: "Startup Behavior",
                             value: remote.autoConnectOnLaunch
-                                ? "Connect automatically when the app launches."
-                                : "Connect manually when you choose."
+                                ? L10n.tr("Connect automatically when the app launches.")
+                                : L10n.tr("Connect manually when you choose.")
                         )
                     }
                 }
@@ -437,21 +437,21 @@ struct SettingsRootView: View {
 
     private var launchStateSummaryText: String {
         if viewModel.launchAtLoginState.requiresApproval {
-            return "Approval Needed"
+            return L10n.tr("Approval Needed")
         }
-        return viewModel.launchAtLoginState.enabled ? "Launch Enabled" : "Launch Disabled"
+        return viewModel.launchAtLoginState.enabled ? L10n.tr("Launch Enabled") : L10n.tr("Launch Disabled")
     }
 
     private var launchStateDetailText: String {
         if viewModel.launchAtLoginState.requiresApproval {
-            return "Pending approval in System Settings -> General -> Login Items."
+            return L10n.tr("Pending approval in System Settings -> General -> Login Items.")
         }
         if let detail = viewModel.launchAtLoginState.detail, !detail.isEmpty {
             return detail
         }
         return viewModel.launchAtLoginState.enabled
-            ? "The app opens automatically when you log in."
-            : "The app launches manually until you enable startup."
+            ? L10n.tr("The app opens automatically when you log in.")
+            : L10n.tr("The app launches manually until you enable startup.")
     }
 
     private var launchStateTint: Color {
@@ -510,7 +510,7 @@ struct SettingsRootView: View {
                     .fill(accent)
                     .frame(width: 7, height: 7)
 
-                Text(title)
+                Text(L10n.tr(title))
                     .font(.headline)
             }
 
@@ -529,7 +529,7 @@ struct SettingsRootView: View {
 
     private func detailField(title: String, value: String, monospaced: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -544,7 +544,7 @@ struct SettingsRootView: View {
 
     private func statusCallout(title: String, message: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
 
@@ -636,9 +636,9 @@ struct SettingsRootView: View {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func duplicateDisplayName(for original: String) -> String {
         let base = original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Remote"
+            ? L10n.tr("Remote")
             : original.trimmingCharacters(in: .whitespacesAndNewlines)
-        let copyBase = "\(base) Copy"
+        let copyBase = L10n.format("%@ %@", base, L10n.tr("Copy"))
 
         let existingNames = Set(viewModel.remotes.map { $0.displayName.lowercased() })
         if !existingNames.contains(copyBase.lowercased()) {
@@ -787,7 +787,7 @@ struct EditorPluginSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { removal in
-            Text("Delete '\(removal.displayName)' from the external plugin folder?")
+            Text(L10n.format("Delete '%@' from the external plugin folder?", removal.displayName))
         }
     }
 
@@ -894,7 +894,7 @@ struct EditorPluginSettingsView: View {
                         .disabled(true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else if activeEditorPlugins.count == 1, let plugin = activeEditorPlugins.first {
-                    Button("Preferred: \(plugin.displayName)") {}
+                    Button(L10n.format("Preferred: %@", plugin.displayName)) {}
                         .buttonStyle(.bordered)
                         .disabled(true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1052,9 +1052,9 @@ struct EditorPluginSettingsView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.subheadline.weight(.semibold))
-            Text(subtitle)
+            Text(L10n.tr(subtitle))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             content()
@@ -1133,7 +1133,7 @@ struct EditorPluginSettingsView: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
 
-                Text("Attempts \(plugin.launchAttempts.count) · Priority \(plugin.priority)")
+                Text(L10n.format("Attempts %lld · Priority %lld", Int64(plugin.launchAttempts.count), Int64(plugin.priority)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -1221,7 +1221,7 @@ struct EditorPluginSettingsView: View {
 
     private func pluginMetricChip(title: String, value: String, tint: Color) -> some View {
         HStack(spacing: 6) {
-            Text(title)
+            Text(L10n.tr(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)
@@ -1237,7 +1237,7 @@ struct EditorPluginSettingsView: View {
     }
 
     private func pluginTag(text: String, tint: Color) -> some View {
-        Text(text)
+        Text(L10n.tr(text))
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -1255,11 +1255,11 @@ struct EditorPluginSettingsView: View {
     private var primaryActionSubtitle: String {
         switch activeEditorPlugins.count {
         case 0:
-            return "Enable at least one plugin to use Open In."
+            return L10n.tr("Enable at least one plugin to use Open In.")
         case 1:
-            return "A single active plugin is used directly."
+            return L10n.tr("A single active plugin is used directly.")
         default:
-            return "Menu bar opens preferred editor first, then falls back across active plugins."
+            return L10n.tr("Menu bar opens preferred editor first, then falls back across active plugins.")
         }
     }
 
@@ -1319,31 +1319,31 @@ struct EditorPluginSettingsView: View {
         ensurePluginSelection()
         pluginActionError = nil
         pluginActionStatus = hadUnsavedChanges
-            ? "Plugin catalog reloaded. Unsaved JSON edits were kept."
-            : "Plugin catalog reloaded."
+            ? L10n.tr("Plugin catalog reloaded. Unsaved JSON edits were kept.")
+            : L10n.tr("Plugin catalog reloaded.")
     }
 
     private func createNewPluginJSON() {
         do {
             let fileURL = try editorPluginRegistry.createExternalPluginTemplateFile()
             pluginActionError = nil
-            pluginActionStatus = "Created \(fileURL.lastPathComponent)."
+            pluginActionStatus = L10n.format("Created %@.", fileURL.lastPathComponent)
             editorPluginRegistry.reloadCatalog()
             if let createdPluginID = pluginIDForManifestURL(fileURL) {
                 selectPlugin(createdPluginID)
             } else {
                 ensurePluginSelection()
-                pluginActionError = "Created plugin file but could not auto-select it. Choose it from the list."
+                pluginActionError = L10n.tr("Created plugin file but could not auto-select it. Choose it from the list.")
             }
         } catch {
-            pluginActionError = "Failed to create plugin JSON: \(error.localizedDescription)"
+            pluginActionError = L10n.format("Failed to create plugin JSON: %@", error.localizedDescription)
             pluginActionStatus = nil
         }
     }
 
     private func requestExternalPluginRemoval(_ plugin: EditorPluginDefinition) {
         guard plugin.source == .external else {
-            pluginActionError = "Built-in plugins cannot be removed."
+            pluginActionError = L10n.tr("Built-in plugins cannot be removed.")
             pluginActionStatus = nil
             return
         }
@@ -1359,11 +1359,11 @@ struct EditorPluginSettingsView: View {
             let removedName = try editorPluginRegistry.removeExternalPlugin(pluginID: pluginID)
             pendingPluginRemoval = nil
             pluginActionError = nil
-            pluginActionStatus = "Removed external plugin '\(removedName)'."
+            pluginActionStatus = L10n.format("Removed external plugin '%@'.", removedName)
             ensurePluginSelection()
         } catch {
             pendingPluginRemoval = nil
-            pluginActionError = "Failed to remove plugin: \(error.localizedDescription)"
+            pluginActionError = L10n.format("Failed to remove plugin: %@", error.localizedDescription)
             pluginActionStatus = nil
         }
     }
@@ -1378,7 +1378,7 @@ struct EditorPluginSettingsView: View {
 
         if let selectedPluginID, editorPluginRegistry.plugin(id: selectedPluginID) != nil {
             if manifestEditorHasChanges {
-                pluginActionStatus = "Unsaved JSON edits were kept. Use Reload File to discard changes."
+                pluginActionStatus = L10n.tr("Unsaved JSON edits were kept. Use Reload File to discard changes.")
                 return
             }
             loadSelectedPluginManifest()
@@ -1425,7 +1425,7 @@ struct EditorPluginSettingsView: View {
             manifestEditorOriginalText = text
             pluginActionError = nil
         } catch {
-            pluginActionError = "Failed to load manifest: \(error.localizedDescription)"
+            pluginActionError = L10n.format("Failed to load manifest: %@", error.localizedDescription)
         }
     }
 
@@ -1435,16 +1435,16 @@ struct EditorPluginSettingsView: View {
             let jsonObject = try JSONSerialization.jsonObject(with: Data(payload.utf8), options: [])
             let formattedData = try JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys])
             guard var formatted = String(data: formattedData, encoding: .utf8) else {
-                throw AppError.validationFailed(["Unable to encode formatted JSON text."])
+                throw AppError.validationFailed([L10n.tr("Unable to encode formatted JSON text.")])
             }
             if !formatted.hasSuffix("\n") {
                 formatted.append("\n")
             }
             manifestEditorText = formatted
             pluginActionError = nil
-            pluginActionStatus = "JSON formatted."
+            pluginActionStatus = L10n.tr("JSON formatted.")
         } catch {
-            pluginActionError = "Failed to format JSON: \(error.localizedDescription)"
+            pluginActionError = L10n.format("Failed to format JSON: %@", error.localizedDescription)
             pluginActionStatus = nil
         }
     }
@@ -1461,9 +1461,9 @@ struct EditorPluginSettingsView: View {
             )
             selectPlugin(resolvedPluginID)
             pluginActionError = nil
-            pluginActionStatus = "Saved \(resolvedPluginID) plugin manifest."
+            pluginActionStatus = L10n.format("Saved %@ plugin manifest.", resolvedPluginID)
         } catch {
-            pluginActionError = "Failed to save plugin JSON: \(error.localizedDescription)"
+            pluginActionError = L10n.format("Failed to save plugin JSON: %@", error.localizedDescription)
             pluginActionStatus = nil
         }
     }

@@ -73,7 +73,10 @@ final class EditorPluginRegistry: ObservableObject {
             issues.append(
                 EditorPluginLoadIssue(
                     file: appSupportDirectoryURL.path,
-                    reason: "Application Support directory lookup returned no user-domain path. Using fallback: \(appSupportDirectoryURL.path)"
+                    reason: L10n.format(
+                        "Application Support directory lookup returned no user-domain path. Using fallback: %@",
+                        appSupportDirectoryURL.path
+                    )
                 )
             )
             didPublishAppSupportFallbackIssue = true
@@ -89,7 +92,10 @@ final class EditorPluginRegistry: ObservableObject {
                 issues.append(
                     EditorPluginLoadIssue(
                         file: loaded.file,
-                        reason: "Plugin ID '\(loaded.plugin.id)' is already defined by a built-in plugin. External manifest was ignored."
+                        reason: L10n.format(
+                            "Plugin ID '%@' is already defined by a built-in plugin. External manifest was ignored.",
+                            loaded.plugin.id
+                        )
                     )
                 )
                 continue
@@ -171,14 +177,14 @@ final class EditorPluginRegistry: ObservableObject {
     /// Beginner note: Loads manifest file contents so UI can edit JSON inline.
     func manifestText(for pluginID: String) throws -> String {
         guard let manifestURL = manifestFileURL(for: pluginID) else {
-            throw AppError.validationFailed(["Manifest file not found for plugin '\(pluginID)'."])
+            throw AppError.validationFailed([L10n.format("Manifest file not found for plugin '%@'.", pluginID)])
         }
 
         do {
             return try String(contentsOf: manifestURL, encoding: .utf8)
         } catch {
             throw AppError.validationFailed([
-                "Unable to read manifest '\(manifestURL.path)': \(error.localizedDescription)"
+                L10n.format("Unable to read manifest '%@': %@", manifestURL.path, error.localizedDescription)
             ])
         }
     }
@@ -188,15 +194,15 @@ final class EditorPluginRegistry: ObservableObject {
     func saveManifestText(_ text: String, for pluginID: String) throws -> String {
         let normalizedID = normalizedPluginID(pluginID)
         guard let definition = plugin(id: normalizedID) else {
-            throw AppError.validationFailed(["Plugin '\(pluginID)' is not available."])
+            throw AppError.validationFailed([L10n.format("Plugin '%@' is not available.", pluginID)])
         }
         guard let manifestURL = manifestFileURL(for: normalizedID) else {
-            throw AppError.validationFailed(["Manifest file not found for plugin '\(pluginID)'."])
+            throw AppError.validationFailed([L10n.format("Manifest file not found for plugin '%@'.", pluginID)])
         }
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            throw AppError.validationFailed(["Manifest cannot be empty."])
+            throw AppError.validationFailed([L10n.tr("Manifest cannot be empty.")])
         }
 
         let manifestData = Data(trimmed.utf8)
@@ -205,7 +211,7 @@ final class EditorPluginRegistry: ObservableObject {
             manifest = try decoder.decode(ExternalPluginManifest.self, from: manifestData)
         } catch {
             throw AppError.validationFailed([
-                "\(manifestURL.lastPathComponent): Invalid JSON schema. \(error.localizedDescription)"
+                L10n.format("%@: Invalid JSON schema. %@", manifestURL.lastPathComponent, error.localizedDescription)
             ])
         }
 
@@ -219,19 +225,19 @@ final class EditorPluginRegistry: ObservableObject {
             let builtInIDs = Set(catalog.filter { $0.source == .builtIn }.map(\.id))
             if builtInIDs.contains(validated.id) {
                 throw AppError.validationFailed([
-                    "\(manifestURL.lastPathComponent): '\(validated.id)' is reserved by a built-in plugin."
+                    L10n.format("%@: '%@' is reserved by a built-in plugin.", manifestURL.lastPathComponent, validated.id)
                 ])
             }
 
             if validated.id != normalizedID {
                 throw AppError.validationFailed([
-                    "\(manifestURL.lastPathComponent): External plugin ID cannot be changed after creation."
+                    L10n.format("%@: External plugin ID cannot be changed after creation.", manifestURL.lastPathComponent)
                 ])
             }
 
         } else if validated.id != normalizedID {
             throw AppError.validationFailed([
-                "\(manifestURL.lastPathComponent): Built-in plugin ID cannot be changed."
+                L10n.format("%@: Built-in plugin ID cannot be changed.", manifestURL.lastPathComponent)
             ])
         }
 
@@ -244,7 +250,7 @@ final class EditorPluginRegistry: ObservableObject {
             try persistedText.write(to: manifestURL, atomically: true, encoding: .utf8)
         } catch {
             throw AppError.validationFailed([
-                "Unable to write manifest '\(manifestURL.path)': \(error.localizedDescription)"
+                L10n.format("Unable to write manifest '%@': %@", manifestURL.path, error.localizedDescription)
             ])
         }
 
@@ -256,14 +262,14 @@ final class EditorPluginRegistry: ObservableObject {
     @discardableResult
     func removeExternalPlugin(pluginID: String) throws -> String {
         guard let definition = plugin(id: pluginID) else {
-            throw AppError.validationFailed(["Plugin '\(pluginID)' is not available."])
+            throw AppError.validationFailed([L10n.format("Plugin '%@' is not available.", pluginID)])
         }
         guard definition.source == .external else {
-            throw AppError.validationFailed(["Built-in plugin '\(pluginID)' cannot be removed."])
+            throw AppError.validationFailed([L10n.format("Built-in plugin '%@' cannot be removed.", pluginID)])
         }
         guard let manifestURL = externalManifestURL(for: definition.id) else {
             throw AppError.validationFailed([
-                "Manifest file for external plugin '\(pluginID)' was not found."
+                L10n.format("Manifest file for external plugin '%@' was not found.", pluginID)
             ])
         }
 
@@ -271,7 +277,7 @@ final class EditorPluginRegistry: ObservableObject {
             try fileManager.removeItem(at: manifestURL)
         } catch {
             throw AppError.validationFailed([
-                "Unable to remove manifest '\(manifestURL.path)': \(error.localizedDescription)"
+                L10n.format("Unable to remove manifest '%@': %@", manifestURL.path, error.localizedDescription)
             ])
         }
 
@@ -409,7 +415,7 @@ final class EditorPluginRegistry: ObservableObject {
             issues.append(
                 EditorPluginLoadIssue(
                     file: pluginsDirectoryURL.path,
-                    reason: "Failed to create plugin directories: \(error.localizedDescription)"
+                    reason: L10n.format("Failed to create plugin directories: %@", error.localizedDescription)
                 )
             )
             return
@@ -434,7 +440,7 @@ final class EditorPluginRegistry: ObservableObject {
             try fileManager.createDirectory(at: pluginsDirectoryURL, withIntermediateDirectories: true)
         } catch {
             throw AppError.validationFailed([
-                "Failed to create plugin directory '\(pluginsDirectoryURL.path)': \(error.localizedDescription)"
+                L10n.format("Failed to create plugin directory '%@': %@", pluginsDirectoryURL.path, error.localizedDescription)
             ])
         }
     }
@@ -467,7 +473,7 @@ final class EditorPluginRegistry: ObservableObject {
                 issues.append(
                     EditorPluginLoadIssue(
                         file: "\(builtInReferenceDirectoryName)/\(plugin.id).json",
-                        reason: "Failed to write built-in reference manifest: \(error.localizedDescription)"
+                        reason: L10n.format("Failed to write built-in reference manifest: %@", error.localizedDescription)
                     )
                 )
             }
@@ -489,7 +495,7 @@ final class EditorPluginRegistry: ObservableObject {
             issues.append(
                 EditorPluginLoadIssue(
                     file: url.lastPathComponent,
-                    reason: "Failed to write scaffold file: \(error.localizedDescription)"
+                    reason: L10n.format("Failed to write scaffold file: %@", error.localizedDescription)
                 )
             )
         }
@@ -614,7 +620,7 @@ final class EditorPluginRegistry: ObservableObject {
             issues.append(
                 EditorPluginLoadIssue(
                     file: pluginsDirectoryURL.path,
-                    reason: "Failed to read plugins directory: \(error.localizedDescription)"
+                    reason: L10n.format("Failed to read plugins directory: %@", error.localizedDescription)
                 )
             )
             return []
@@ -633,7 +639,7 @@ final class EditorPluginRegistry: ObservableObject {
                     issues.append(
                         EditorPluginLoadIssue(
                             file: fileURL.lastPathComponent,
-                            reason: "Plugin ID '\(validated.id)' is duplicated in external manifests."
+                            reason: L10n.format("Plugin ID '%@' is duplicated in external manifests.", validated.id)
                         )
                     )
                     continue
@@ -661,23 +667,23 @@ final class EditorPluginRegistry: ObservableObject {
     ) throws -> EditorPluginDefinition {
         let id = normalizedPluginID(manifest.id)
         guard !id.isEmpty else {
-            throw AppError.validationFailed(["\(fileName): Plugin id is required."])
+            throw AppError.validationFailed([L10n.format("%@: Plugin id is required.", fileName)])
         }
         guard id.range(of: "^[a-z0-9._-]+$", options: .regularExpression) != nil else {
-            throw AppError.validationFailed(["\(fileName): Plugin id '\(id)' contains invalid characters."])
+            throw AppError.validationFailed([L10n.format("%@: Plugin id '%@' contains invalid characters.", fileName, id)])
         }
 
         let displayName = manifest.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !displayName.isEmpty else {
-            throw AppError.validationFailed(["\(fileName): displayName is required."])
+            throw AppError.validationFailed([L10n.format("%@: displayName is required.", fileName)])
         }
 
         guard !manifest.launchAttempts.isEmpty else {
-            throw AppError.validationFailed(["\(fileName): At least one launch attempt is required."])
+            throw AppError.validationFailed([L10n.format("%@: At least one launch attempt is required.", fileName)])
         }
 
         guard manifest.priority >= 0 else {
-            throw AppError.validationFailed(["\(fileName): priority must be 0 or greater."])
+            throw AppError.validationFailed([L10n.format("%@: priority must be 0 or greater.", fileName)])
         }
         let priority = manifest.priority
 
@@ -704,23 +710,23 @@ final class EditorPluginRegistry: ObservableObject {
     ) throws -> EditorLaunchAttemptDefinition {
         let label = candidate.label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !label.isEmpty else {
-            throw AppError.validationFailed(["\(fileName): launchAttempts[\(index)] label is required."])
+            throw AppError.validationFailed([L10n.format("%@: launchAttempts[%lld] label is required.", fileName, Int64(index))])
         }
 
         let executable = candidate.executable.trimmingCharacters(in: .whitespacesAndNewlines)
         guard executable == "/usr/bin/open" || executable == "/usr/bin/env" else {
             throw AppError.validationFailed([
-                "\(fileName): launchAttempts[\(index)] executable must be /usr/bin/open or /usr/bin/env."
+                L10n.format("%@: launchAttempts[%lld] executable must be /usr/bin/open or /usr/bin/env.", fileName, Int64(index))
             ])
         }
 
         guard !candidate.arguments.isEmpty else {
-            throw AppError.validationFailed(["\(fileName): launchAttempts[\(index)] arguments cannot be empty."])
+            throw AppError.validationFailed([L10n.format("%@: launchAttempts[%lld] arguments cannot be empty.", fileName, Int64(index))])
         }
 
         guard candidate.arguments.contains(where: { $0.contains(folderPathPlaceholder) }) else {
             throw AppError.validationFailed([
-                "\(fileName): launchAttempts[\(index)] must include {folderPath} placeholder."
+                L10n.format("%@: launchAttempts[%lld] must include {folderPath} placeholder.", fileName, Int64(index))
             ])
         }
 
@@ -728,7 +734,7 @@ final class EditorPluginRegistry: ObservableObject {
             let hasBrace = argument.contains("{") || argument.contains("}")
             if hasBrace && !argument.contains(folderPathPlaceholder) {
                 throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] contains unsupported placeholder in argument '\(argument)'."
+                    L10n.format("%@: launchAttempts[%lld] contains unsupported placeholder in argument '%@'.", fileName, Int64(index), argument)
                 ])
             }
         }
@@ -737,7 +743,7 @@ final class EditorPluginRegistry: ObservableObject {
             // Keep plugin manifests aligned to safe app-launch forms only.
             guard candidate.arguments.contains("-a") || candidate.arguments.contains("-b") else {
                 throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] /usr/bin/open form must use -a or -b."
+                    L10n.format("%@: launchAttempts[%lld] /usr/bin/open form must use -a or -b.", fileName, Int64(index))
                 ])
             }
         }
@@ -749,17 +755,17 @@ final class EditorPluginRegistry: ObservableObject {
                   !command.contains("/"),
                   command.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
                 throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form must start with a bare command token."
+                    L10n.format("%@: launchAttempts[%lld] /usr/bin/env form must start with a bare command token.", fileName, Int64(index))
                 ])
             }
             guard !candidate.arguments.contains("sh") && !candidate.arguments.contains("-c") else {
                 throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form cannot contain shell commands."
+                    L10n.format("%@: launchAttempts[%lld] /usr/bin/env form cannot contain shell commands.", fileName, Int64(index))
                 ])
             }
             guard candidate.arguments.last == folderPathPlaceholder else {
                 throw AppError.validationFailed([
-                    "\(fileName): launchAttempts[\(index)] /usr/bin/env form must have {folderPath} as the final argument."
+                    L10n.format("%@: launchAttempts[%lld] /usr/bin/env form must have {folderPath} as the final argument.", fileName, Int64(index))
                 ])
             }
         }
@@ -787,7 +793,7 @@ final class EditorPluginRegistry: ObservableObject {
         issues.append(
             EditorPluginLoadIssue(
                 file: bundledBuiltInPluginsFolderName,
-                reason: "Bundled built-in plugin catalog was unavailable. Falling back to hardcoded built-ins."
+                reason: L10n.tr("Bundled built-in plugin catalog was unavailable. Falling back to hardcoded built-ins.")
             )
         )
         return hardcodedBuiltInCatalog()
@@ -815,7 +821,7 @@ final class EditorPluginRegistry: ObservableObject {
             issues.append(
                 EditorPluginLoadIssue(
                     file: bundledBuiltInPluginsFolderName,
-                    reason: "Failed to read bundled built-in plugin directory: \(error.localizedDescription)"
+                    reason: L10n.format("Failed to read bundled built-in plugin directory: %@", error.localizedDescription)
                 )
             )
             return []
@@ -830,7 +836,7 @@ final class EditorPluginRegistry: ObservableObject {
                 issues.append(
                     EditorPluginLoadIssue(
                         file: "\(directoryURL.lastPathComponent)/\(bundledPluginManifestFileName)",
-                        reason: "Bundled plugin directory is missing \(bundledPluginManifestFileName)."
+                        reason: L10n.format("Bundled plugin directory is missing %@.", bundledPluginManifestFileName)
                     )
                 )
                 continue
@@ -846,7 +852,7 @@ final class EditorPluginRegistry: ObservableObject {
                     issues.append(
                         EditorPluginLoadIssue(
                             file: fileLabel,
-                            reason: "Duplicate bundled built-in plugin ID '\(validated.id)'."
+                            reason: L10n.format("Duplicate bundled built-in plugin ID '%@'.", validated.id)
                         )
                     )
                     continue
@@ -858,7 +864,7 @@ final class EditorPluginRegistry: ObservableObject {
                 issues.append(
                     EditorPluginLoadIssue(
                         file: "\(directoryURL.lastPathComponent)/\(bundledPluginManifestFileName)",
-                        reason: "Failed to decode bundled built-in plugin: \(error.localizedDescription)"
+                        reason: L10n.format("Failed to decode bundled built-in plugin: %@", error.localizedDescription)
                     )
                 )
             }

@@ -157,39 +157,39 @@ final class RemoteBrowserViewModel: ObservableObject {
 
     var itemCountText: String {
         let count = visibleEntries.count
-        return count == 1 ? "1 folder" : "\(count) folders"
+        return count == 1 ? L10n.tr("1 folder") : L10n.format("%lld folders", Int64(count))
     }
 
     var healthText: String {
         switch health.state {
         case .connecting:
-            return "Connecting…"
+            return L10n.tr("Connecting…")
         case .healthy:
-            return "Connected"
+            return L10n.tr("Connected")
         case .degraded:
-            return "Degraded"
+            return L10n.tr("Degraded")
         case .reconnecting:
-            return "Reconnecting…"
+            return L10n.tr("Reconnecting…")
         case .failed:
-            return "Connection Failed"
+            return L10n.tr("Connection Failed")
         case .closed:
-            return "Closed"
+            return L10n.tr("Closed")
         }
     }
 
     var lastSuccessText: String {
         guard let timestamp = health.lastSuccessAt else {
-            return "Last success: -"
+            return L10n.tr("Last success: -")
         }
 
-        return "Last success: \(Self.statusDateFormatter.string(from: timestamp))"
+        return L10n.format("Last success: %@", Self.statusDateFormatter.string(from: timestamp))
     }
 
     var latencyText: String {
         guard let latencyMs = health.lastLatencyMs else {
-            return "Latency: -"
+            return L10n.tr("Latency: -")
         }
-        return "Latency: \(latencyMs) ms"
+        return L10n.format("Latency: %lld ms", Int64(latencyMs))
     }
 
     var hasVisibleData: Bool {

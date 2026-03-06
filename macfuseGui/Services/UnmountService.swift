@@ -71,7 +71,13 @@ final class UnmountService {
                     category: "unmount",
                     message: "Unmount attempts timed out for \(normalizedMountPoint) after \(Int(totalUnmountTimeout))s."
                 )
-                throw AppError.timeout("Unmount attempts timed out for \(normalizedMountPoint) after \(Int(totalUnmountTimeout))s.")
+                throw AppError.timeout(
+                    L10n.format(
+                        "Unmount attempts timed out for %@ after %llds.",
+                        normalizedMountPoint,
+                        Int64(totalUnmountTimeout)
+                    )
+                )
             }
 
             if try await runUnmountCommandSet(
@@ -103,7 +109,13 @@ final class UnmountService {
                     category: "unmount",
                     message: "Unmount attempts timed out for \(normalizedMountPoint) after \(Int(totalUnmountTimeout))s."
                 )
-                throw AppError.timeout("Unmount attempts timed out for \(normalizedMountPoint) after \(Int(totalUnmountTimeout))s.")
+                throw AppError.timeout(
+                    L10n.format(
+                        "Unmount attempts timed out for %@ after %llds.",
+                        normalizedMountPoint,
+                        Int64(totalUnmountTimeout)
+                    )
+                )
             }
 
             if try await !isMounted(normalizedMountPoint, deadline: deadline) {
@@ -122,7 +134,13 @@ final class UnmountService {
         }
 
         if Date() >= deadline {
-            throw AppError.timeout("Unmount attempts timed out for \(normalizedMountPoint) after \(Int(totalUnmountTimeout))s.")
+            throw AppError.timeout(
+                L10n.format(
+                    "Unmount attempts timed out for %@ after %llds.",
+                    normalizedMountPoint,
+                    Int64(totalUnmountTimeout)
+                )
+            )
         }
 
         if try await !isMounted(normalizedMountPoint, deadline: deadline) {
@@ -135,7 +153,7 @@ final class UnmountService {
             includeGenericFallback: true
         )
 
-        throw AppError.processFailure("Failed to unmount \(normalizedMountPoint).")
+        throw AppError.processFailure(L10n.format("Failed to unmount %@.", normalizedMountPoint))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -239,9 +257,9 @@ final class UnmountService {
 
             let detail: String
             if result.timedOut {
-                detail = "timed out after \(Int(timeout))s"
+                detail = L10n.format("timed out after %llds", Int64(timeout))
             } else {
-                detail = failureOutput.isEmpty ? "exit code \(result.exitCode)" : failureOutput
+                detail = failureOutput.isEmpty ? L10n.format("exit code %lld", Int64(result.exitCode)) : failureOutput
             }
             failures.append("\(command.label): \(detail)")
             diagnostics.append(level: .warning, category: "unmount", message: "\(command.label) failed for \(mountPoint): \(detail)")
@@ -277,7 +295,11 @@ final class UnmountService {
                 .map { "\($0.command)(\($0.pid))" }
                 .joined(separator: ", ")
             throw AppError.processFailure(
-                "Mount point is busy: \(mountPoint). Blocking processes: \(summary). Close files/windows and retry."
+                L10n.format(
+                    "Mount point is busy: %@. Blocking processes: %@. Close files/windows and retry.",
+                    mountPoint,
+                    summary
+                )
             )
         }
 
@@ -286,7 +308,10 @@ final class UnmountService {
         }
 
         throw AppError.processFailure(
-            "Mount point is busy: \(mountPoint). Close Finder windows or files using this mount and retry."
+            L10n.format(
+                "Mount point is busy: %@. Close Finder windows or files using this mount and retry.",
+                mountPoint
+            )
         )
     }
 
@@ -502,7 +527,7 @@ final class UnmountService {
 
         let remaining = deadline.timeIntervalSinceNow
         if remaining <= 0 {
-            throw AppError.timeout("\(operation.capitalized) timed out for \(mountPoint).")
+            throw AppError.timeout(L10n.format("%@ timed out for %@.", operation.capitalized, mountPoint))
         }
 
         return min(base, remaining)
@@ -512,7 +537,7 @@ final class UnmountService {
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     private func throwIfCancelled() throws {
         if Task.isCancelled {
-            throw AppError.timeout("Unmount operation cancelled.")
+            throw AppError.timeout(L10n.tr("Unmount operation cancelled."))
         }
     }
 

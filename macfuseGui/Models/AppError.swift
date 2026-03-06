@@ -88,42 +88,42 @@ enum AppError: LocalizedError, Equatable, Sendable {
     var failureReason: String? {
         switch self {
         case .dependencyMissing:
-            return "A required system dependency is unavailable."
+            return L10n.tr("A required system dependency is unavailable.")
         case .validationFailed:
-            return "Provided input did not pass validation."
+            return L10n.tr("Provided input did not pass validation.")
         case .processFailure:
-            return "An external command failed."
+            return L10n.tr("An external command failed.")
         case .keychainError:
-            return "A secure credential operation failed."
+            return L10n.tr("A secure credential operation failed.")
         case .persistenceError:
-            return "Configuration data could not be loaded or saved."
+            return L10n.tr("Configuration data could not be loaded or saved.")
         case .remoteBrowserError:
-            return "Remote directory browsing failed."
+            return L10n.tr("Remote directory browsing failed.")
         case .timeout:
-            return "The operation exceeded its time limit."
+            return L10n.tr("The operation exceeded its time limit.")
         case .unknown:
-            return "An internal error occurred."
+            return L10n.tr("An internal error occurred.")
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
         case .dependencyMissing:
-            return "Install missing dependencies and try again."
+            return L10n.tr("Install missing dependencies and try again.")
         case .validationFailed:
-            return "Correct the highlighted values and try again."
+            return L10n.tr("Correct the highlighted values and try again.")
         case .processFailure:
-            return "Review diagnostics for command details, then retry."
+            return L10n.tr("Review diagnostics for command details, then retry.")
         case .keychainError:
-            return "Unlock Keychain or grant required permissions, then retry."
+            return L10n.tr("Unlock Keychain or grant required permissions, then retry.")
         case .persistenceError:
-            return "Check disk permissions and available space, then retry."
+            return L10n.tr("Check disk permissions and available space, then retry.")
         case .remoteBrowserError:
-            return "Verify connection settings and credentials, then retry."
+            return L10n.tr("Verify connection settings and credentials, then retry.")
         case .timeout:
-            return "Check network/system load and retry."
+            return L10n.tr("Check network/system load and retry.")
         case .unknown:
-            return "Retry the operation. If it persists, copy diagnostics and contact support."
+            return L10n.tr("Retry the operation. If it persists, copy diagnostics and contact support.")
         }
     }
 }

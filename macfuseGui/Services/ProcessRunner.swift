@@ -283,7 +283,11 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         continuation.resume(returning: result)
                     } catch {
                         self.unregisterRunningProcess(commandID: commandID)
-                        continuation.resume(throwing: AppError.processFailure("Failed to start process: \(error.localizedDescription)"))
+                        continuation.resume(
+                            throwing: AppError.processFailure(
+                                L10n.format("Failed to start process: %@", error.localizedDescription)
+                            )
+                        )
                     }
                 }
             }

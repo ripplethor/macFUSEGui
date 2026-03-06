@@ -49,7 +49,7 @@ struct StatusBadgeView: View {
                 .stroke(state.badgeColor.opacity(0.20), lineWidth: 1)
         )
         .foregroundStyle(state.badgeColor)
-            .accessibilityLabel("Status: \(state.displayLabel)")
+            .accessibilityLabel(L10n.format("Status: %@", state.displayLabel))
     }
 }
 
@@ -57,17 +57,17 @@ private extension RemoteStatusBadgeState {
     var displayLabel: String {
         switch self {
         case .connected:
-            return "Connected"
+            return L10n.tr("Connected")
         case .reconnecting:
-            return "Reconnecting"
+            return L10n.tr("Reconnecting")
         case .connecting:
-            return "Connecting"
+            return L10n.tr("Connecting")
         case .disconnecting:
-            return "Disconnecting"
+            return L10n.tr("Disconnecting")
         case .error:
-            return "Error"
+            return L10n.tr("Error")
         case .disconnected:
-            return "Disconnected"
+            return L10n.tr("Disconnected")
         }
     }
 

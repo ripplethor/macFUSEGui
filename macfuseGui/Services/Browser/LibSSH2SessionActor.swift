@@ -171,7 +171,7 @@ actor LibSSH2SessionActor {
                 fromCache: true,
                 requestID: requestID,
                 latencyMs: 0,
-                message: "Browser session is closed.",
+                message: L10n.tr("Browser session is closed."),
                 stateOverride: .closed
             )
         }
@@ -193,7 +193,7 @@ actor LibSSH2SessionActor {
                 fromCache: cached.fromCache,
                 requestID: requestID,
                 latencyMs: 0,
-                message: "Connection is unstable. Retrying automatically.",
+                message: L10n.tr("Connection is unstable. Retrying automatically."),
                 stateOverride: .failed
             )
             logSnapshot(snapshot, requestID: requestID, pathIn: normalizedPath, resolvedPath: snapshot.path, reopenedSession: false)
@@ -366,11 +366,11 @@ actor LibSSH2SessionActor {
                 // Empty listing while cache exists is treated as transient until confirmed.
                 let strike = (emptyListingStrikeByPath[pathKey] ?? 0) + 1
                 emptyListingStrikeByPath[pathKey] = strike
-                let message = "Received an empty listing. Keeping previous data while reconnecting."
+                let message = L10n.tr("Received an empty listing. Keeping previous data while reconnecting.")
                 setHealth(
                     state: .degraded,
                     retryCount: strike,
-                    lastError: "Received empty listing",
+                    lastError: L10n.tr("Received empty listing"),
                     preserveLastSuccess: true
                 )
                 let snapshot = makeSnapshot(
@@ -432,7 +432,7 @@ actor LibSSH2SessionActor {
                     lastError: error.localizedDescription,
                     preserveLastSuccess: true
                 )
-                let message = "Empty response could not be confirmed. Reconnecting…"
+                let message = L10n.tr("Empty response could not be confirmed. Reconnecting…")
                 let snapshot = makeSnapshot(
                     path: effectivePath,
                     entries: fallback.entries,
@@ -534,7 +534,7 @@ actor LibSSH2SessionActor {
                 fromCache: cached.fromCache,
                 requestID: requestID,
                 latencyMs: 0,
-                message: "Connection lost. Reconnecting… (attempt \(consecutiveFailures))",
+                message: L10n.format("Connection lost. Reconnecting… (attempt %lld)", Int64(consecutiveFailures)),
                 stateOverride: .reconnecting
             )
         }
@@ -547,7 +547,7 @@ actor LibSSH2SessionActor {
             fromCache: false,
             requestID: requestID,
             latencyMs: 0,
-            message: lastError ?? "Unable to load this path.",
+            message: lastError ?? L10n.tr("Unable to load this path."),
             stateOverride: .failed
         )
     }

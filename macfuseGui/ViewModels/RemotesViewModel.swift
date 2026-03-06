@@ -375,7 +375,7 @@ final class RemotesViewModel: ObservableObject {
                 self.launchAtLoginState = try await self.launchAtLoginService.setEnabled(enabled)
 
                 if self.launchAtLoginState.requiresApproval {
-                    self.alertMessage = "Launch at login requires approval in System Settings -> General -> Login Items."
+                    self.alertMessage = L10n.tr("Launch at login requires approval in System Settings -> General -> Login Items.")
                 } else {
                     self.alertMessage = nil
                 }
@@ -387,7 +387,7 @@ final class RemotesViewModel: ObservableObject {
                 )
             } catch {
                 self.launchAtLoginState = self.launchAtLoginService.currentState()
-                self.alertMessage = "Could not update launch at login: \(error.localizedDescription)"
+                self.alertMessage = L10n.format("Could not update launch at login: %@", error.localizedDescription)
                 self.diagnostics.append(level: .error, category: "startup", message: "Failed to set launch at login: \(error.localizedDescription)")
             }
         }
@@ -632,7 +632,7 @@ final class RemotesViewModel: ObservableObject {
                $0.id != editingID &&
                $0.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == requestedName
            }) {
-            errors.append("Display name must be unique. '\(conflictingRemote.displayName)' already exists.")
+            errors.append(L10n.format("Display name must be unique. '%@' already exists.", conflictingRemote.displayName))
         }
 
         if !requestedMountPoint.isEmpty,
@@ -640,7 +640,7 @@ final class RemotesViewModel: ObservableObject {
                $0.id != editingID &&
                normalizedMountPath($0.localMountPoint) == requestedMountPoint
            }) {
-            errors.append("Local mount point is already used by '\(conflictingRemote.displayName)'. Choose a different folder.")
+            errors.append(L10n.format("Local mount point is already used by '%@'. Choose a different folder.", conflictingRemote.displayName))
         }
 
         return errors
@@ -717,7 +717,7 @@ final class RemotesViewModel: ObservableObject {
 
             let finalState = status(for: remoteID).state
             if finalState != .disconnected {
-                alertMessage = "Could not delete '\(remote.displayName)' because it is still mounted or busy. Disconnect and retry."
+                alertMessage = L10n.format("Could not delete '%@' because it is still mounted or busy. Disconnect and retry.", remote.displayName)
                 diagnostics.append(
                     level: .warning,
                     category: "store",
@@ -991,7 +991,7 @@ final class RemotesViewModel: ObservableObject {
             setStatus(disconnected, for: remote.id)
         }
 
-        alertMessage = "Force reset complete. Use Connect to reconnect remotes."
+        alertMessage = L10n.tr("Force reset complete. Use Connect to reconnect remotes.")
         diagnostics.append(level: .info, category: "operations", message: "Manual force reset completed.")
     }
 
@@ -1244,7 +1244,10 @@ final class RemotesViewModel: ObservableObject {
             let conflictStatus = RemoteStatus(
                 state: .error,
                 mountedPath: nil,
-                lastError: "Local mount point is shared with '\(conflictingRemote.displayName)'. Use a unique local mount folder.",
+                lastError: L10n.format(
+                    "Local mount point is shared with '%@'. Use a unique local mount folder.",
+                    conflictingRemote.displayName
+                ),
                 updatedAt: Date()
             )
             observeStatus(conflictStatus, for: remote.id)
@@ -1292,7 +1295,7 @@ final class RemotesViewModel: ObservableObject {
                 let status = RemoteStatus(
                     state: .error,
                     mountedPath: nil,
-                    lastError: "Password is missing or unavailable. Edit remote and save password again.",
+                    lastError: L10n.tr("Password is missing or unavailable. Edit remote and save password again."),
                     updatedAt: Date()
                 )
                 observeStatus(status, for: remote.id)
@@ -1344,14 +1347,14 @@ final class RemotesViewModel: ObservableObject {
             status = RemoteStatus(
                 state: .error,
                 mountedPath: nil,
-                lastError: "Connect timed out. Check network/host and retry.",
+                lastError: L10n.tr("Connect timed out. Check network/host and retry."),
                 updatedAt: Date()
             )
         } else {
             status = connectStatus ?? RemoteStatus(
                 state: .error,
                 mountedPath: nil,
-                lastError: "Connect failed with unknown error.",
+                lastError: L10n.tr("Connect failed with unknown error."),
                 updatedAt: Date()
             )
         }
@@ -1459,7 +1462,10 @@ final class RemotesViewModel: ObservableObject {
                 status = RemoteStatus(
                     state: .error,
                     mountedPath: nil,
-                    lastError: "Disconnect timed out after \(Int(disconnectWatchdogTimeout))s. Close any files using the mount, then retry.",
+                    lastError: L10n.format(
+                        "Disconnect timed out after %llds. Close any files using the mount, then retry.",
+                        Int64(disconnectWatchdogTimeout)
+                    ),
                     updatedAt: Date()
                 )
             }
@@ -1467,7 +1473,7 @@ final class RemotesViewModel: ObservableObject {
             status = disconnectStatus ?? RemoteStatus(
                 state: .error,
                 mountedPath: nil,
-                lastError: "Disconnect failed with unknown error.",
+                lastError: L10n.tr("Disconnect failed with unknown error."),
                 updatedAt: Date()
             )
         }
@@ -1507,7 +1513,10 @@ final class RemotesViewModel: ObservableObject {
             let conflictStatus = RemoteStatus(
                 state: .error,
                 mountedPath: nil,
-                lastError: "Local mount point is shared with '\(conflictingRemote.displayName)'. Use a unique local mount folder.",
+                lastError: L10n.format(
+                    "Local mount point is shared with '%@'. Use a unique local mount folder.",
+                    conflictingRemote.displayName
+                ),
                 updatedAt: Date()
             )
             observeStatus(conflictStatus, for: remote.id)
@@ -1750,7 +1759,7 @@ final class RemotesViewModel: ObservableObject {
         await performFastRecoveryCleanup(
             targets: targets,
             cancellationReason: "wake-preflight",
-            disconnectedMessage: "Re-establishing connection after wake.",
+            disconnectedMessage: L10n.tr("Re-establishing connection after wake."),
             startMessage: "Wake preflight cleanup for \(targets.count) desired remote(s) (parallel, fast force-unmount).",
             completionPrefix: "Wake preflight cleanup"
         )
@@ -1786,7 +1795,7 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
-        let message = "Mount was unmounted by macOS. Re-establishing connection."
+        let message = L10n.tr("Mount was unmounted by macOS. Re-establishing connection.")
         let status = RemoteStatus(
             state: .disconnected,
             mountedPath: nil,
@@ -1898,7 +1907,7 @@ final class RemotesViewModel: ObservableObject {
         await performFastRecoveryCleanup(
             targets: targets,
             cancellationReason: "network-unreachable",
-            disconnectedMessage: "Network unavailable. Disconnected to avoid stale mount hangs. Will reconnect when network returns.",
+            disconnectedMessage: L10n.tr("Network unavailable. Disconnected to avoid stale mount hangs. Will reconnect when network returns."),
             startMessage: "Network loss cleanup for \(targets.count) desired remote(s) (parallel, fast force-unmount).",
             completionPrefix: "Network loss cleanup"
         )
@@ -2680,7 +2689,7 @@ final class RemotesViewModel: ObservableObject {
             return RemoteStatus(
                 state: .disconnected,
                 mountedPath: nil,
-                lastError: "Connection reset after timeout.",
+                lastError: L10n.tr("Connection reset after timeout."),
                 updatedAt: Date()
             )
         }
@@ -2701,17 +2710,17 @@ final class RemotesViewModel: ObservableObject {
         switch intent {
         case .connect:
             return currentState == .connecting
-                ? "Connect timed out. Check network/credentials and retry. If the remote server was restarted, disconnect and reconnect to clear stale mount state."
+                ? L10n.tr("Connect timed out. Check network/credentials and retry. If the remote server was restarted, disconnect and reconnect to clear stale mount state.")
                 : nil
         case .disconnect:
             guard currentState == .disconnecting else {
                 return nil
             }
-            return "Disconnect timed out after \(Int(disconnectWatchdogTimeout))s. Close files using the mount, then retry."
+            return L10n.format("Disconnect timed out after %llds. Close files using the mount, then retry.", Int64(disconnectWatchdogTimeout))
         case .refresh:
-            return "Status refresh timed out. The mount may be stale (common after server restart). Disconnect and reconnect this remote."
+            return L10n.tr("Status refresh timed out. The mount may be stale (common after server restart). Disconnect and reconnect this remote.")
         case .testConnection:
-            return "Test connection timed out. Check network/credentials and retry."
+            return L10n.tr("Test connection timed out. Check network/credentials and retry.")
         }
     }
 
@@ -2727,7 +2736,7 @@ final class RemotesViewModel: ObservableObject {
         if let conflictingRemote = mountPointConflict(for: remote) {
             return .failure(
                 AppError.validationFailed([
-                    "Local mount point is already used by '\(conflictingRemote.displayName)'. Choose a different folder."
+                    L10n.format("Local mount point is already used by '%@'. Choose a different folder.", conflictingRemote.displayName)
                 ])
             )
         }
@@ -2747,7 +2756,7 @@ final class RemotesViewModel: ObservableObject {
             }
 
             if password?.isEmpty != false {
-                return .failure(AppError.validationFailed(["Password is missing. Enter a password or save one to Keychain first."]))
+                return .failure(AppError.validationFailed([L10n.tr("Password is missing. Enter a password or save one to Keychain first.")]))
             }
         }
 
@@ -2971,7 +2980,7 @@ final class RemotesViewModel: ObservableObject {
     /// This is async and throwing: callers must await it and handle failures.
     func startBrowserSession(for draft: RemoteDraft) async throws -> RemoteBrowserSessionID {
         guard !shutdownInProgress else {
-            throw AppError.unknown("App is shutting down.")
+            throw AppError.unknown(L10n.tr("App is shutting down."))
         }
         let remote = draft.asRemoteConfig()
         let passwordToUse = try await browserPassword(for: draft)
@@ -3060,7 +3069,7 @@ final class RemotesViewModel: ObservableObject {
         }
         let snapshot = await loadBrowserPath(sessionID: sessionID, path: path, requestID: 1)
         if snapshot.health.state == .failed && snapshot.entries.isEmpty {
-            throw AppError.remoteBrowserError(snapshot.message ?? snapshot.health.lastError ?? "Failed to list remote directories.")
+            throw AppError.remoteBrowserError(snapshot.message ?? snapshot.health.lastError ?? L10n.tr("Failed to list remote directories."))
         }
         return snapshot.entries.map { RemoteDirectoryEntry(name: $0.name, fullPath: $0.fullPath) }
     }
@@ -3082,7 +3091,7 @@ final class RemotesViewModel: ObservableObject {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(snapshot, forType: .string)
-            alertMessage = "Diagnostics copied to clipboard."
+            alertMessage = L10n.tr("Diagnostics copied to clipboard.")
             diagnostics.append(level: .info, category: "diagnostics", message: "Copied diagnostics snapshot")
         }
     }
@@ -3110,7 +3119,7 @@ final class RemotesViewModel: ObservableObject {
             }
         }
 
-        throw AppError.validationFailed(["Password is missing. Enter a password before browsing remote directories."])
+        throw AppError.validationFailed([L10n.tr("Password is missing. Enter a password before browsing remote directories.")])
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -3352,7 +3361,7 @@ final class LaunchAtLoginService {
             return LaunchAtLoginState(
                 enabled: true,
                 requiresApproval: false,
-                detail: "Enabled via LaunchAgent fallback."
+                detail: L10n.tr("Enabled via LaunchAgent fallback.")
             )
         }
 
@@ -3364,7 +3373,7 @@ final class LaunchAtLoginService {
             return LaunchAtLoginState(
                 enabled: false,
                 requiresApproval: true,
-                detail: "Approval required in System Settings -> General -> Login Items."
+                detail: L10n.tr("Approval required in System Settings -> General -> Login Items.")
             )
         case .notRegistered:
             return LaunchAtLoginState(enabled: false, requiresApproval: false, detail: nil)
@@ -3372,10 +3381,10 @@ final class LaunchAtLoginService {
             return LaunchAtLoginState(
                 enabled: false,
                 requiresApproval: false,
-                detail: "App may need to be in /Applications for launch at login to register."
+                detail: L10n.tr("App may need to be in /Applications for launch at login to register.")
             )
         @unknown default:
-            return LaunchAtLoginState(enabled: false, requiresApproval: false, detail: "Unknown status")
+            return LaunchAtLoginState(enabled: false, requiresApproval: false, detail: L10n.tr("Unknown status"))
         }
     }
 
@@ -3403,7 +3412,7 @@ final class LaunchAtLoginService {
             }
 
             if !registered {
-                throw AppError.unknown("Unable to enable launch at login.")
+                throw AppError.unknown(L10n.tr("Unable to enable launch at login."))
             }
         } else {
             do {
@@ -3439,7 +3448,7 @@ final class LaunchAtLoginService {
     private func enableLaunchAgentFallback() async throws {
         let bundlePath = currentBundlePath
         guard fileManager.fileExists(atPath: bundlePath) else {
-            throw AppError.unknown("Unable to enable launch at login because app bundle path was not found.")
+            throw AppError.unknown(L10n.tr("Unable to enable launch at login because app bundle path was not found."))
         }
 
         try fileManager.createDirectory(
@@ -3492,14 +3501,24 @@ final class LaunchAtLoginService {
         )
 
         if result.timedOut {
-            throw AppError.timeout("launchctl \(arguments.joined(separator: " ")) timed out after \(Int(launchctlTimeout))s.")
+            throw AppError.timeout(
+                L10n.format(
+                    "launchctl %@ timed out after %llds.",
+                    arguments.joined(separator: " "),
+                    Int64(launchctlTimeout)
+                )
+            )
         }
 
         if result.exitCode != 0 {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             throw AppError.unknown(
-                "launchctl \(arguments.joined(separator: " ")) failed: \(stderr.isEmpty ? stdout : stderr)"
+                L10n.format(
+                    "launchctl %@ failed: %@",
+                    arguments.joined(separator: " "),
+                    stderr.isEmpty ? stdout : stderr
+                )
             )
         }
 

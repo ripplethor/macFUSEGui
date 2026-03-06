@@ -217,7 +217,7 @@ actor MountManager {
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
-                        lastError: "Mount could not be verified. Reconnect will perform cleanup.",
+                        lastError: L10n.tr("Mount could not be verified. Reconnect will perform cleanup."),
                         updatedAt: Date()
                     )
                     updateCachedStatus(staleStatus, for: remote.id)
@@ -262,7 +262,7 @@ actor MountManager {
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
-                        lastError: "Detected stale mount. Reconnect will perform cleanup.",
+                        lastError: L10n.tr("Detected stale mount. Reconnect will perform cleanup."),
                         updatedAt: Date()
                     )
                     updateCachedStatus(staleStatus, for: remote.id)
@@ -336,7 +336,7 @@ actor MountManager {
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
-                        lastError: "Detected stale mount. Reconnect will perform cleanup.",
+                        lastError: L10n.tr("Detected stale mount. Reconnect will perform cleanup."),
                         updatedAt: Date()
                     )
                     updateCachedStatus(staleStatus, for: remote.id)
@@ -394,7 +394,7 @@ actor MountManager {
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
-                        lastError: "Detected stale mount. Reconnect will perform cleanup.",
+                        lastError: L10n.tr("Detected stale mount. Reconnect will perform cleanup."),
                         updatedAt: Date()
                     )
                     updateCachedStatus(staleStatus, for: remote.id)
@@ -461,7 +461,7 @@ actor MountManager {
                     let staleStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
-                        lastError: "Mount verification failed. Reconnect will perform cleanup.",
+                        lastError: L10n.tr("Mount verification failed. Reconnect will perform cleanup."),
                         updatedAt: Date()
                     )
                     updateCachedStatus(staleStatus, for: remote.id)
@@ -565,7 +565,10 @@ actor MountManager {
                 ) != nil
                 if stillMounted {
                     throw AppError.processFailure(
-                        "Mount is still active at \(remote.localMountPoint). Wait a few seconds and retry Connect."
+                        L10n.format(
+                            "Mount is still active at %@. Wait a few seconds and retry Connect.",
+                            remote.localMountPoint
+                        )
                     )
                 }
             }
@@ -646,7 +649,10 @@ actor MountManager {
         ) != nil {
             // Test mode is intentionally non-destructive; never hijack an active mount.
             throw AppError.validationFailed([
-                "Mount point is already mounted: \(remote.localMountPoint). Disconnect it first, then run Test Connection."
+                L10n.format(
+                    "Mount point is already mounted: %@. Disconnect it first, then run Test Connection.",
+                    remote.localMountPoint
+                )
             ])
         }
 
@@ -667,7 +673,7 @@ actor MountManager {
             try await unmountService.unmount(mountPoint: remote.localMountPoint)
             try await waitForUnmount(mountPoint: remote.localMountPoint, timeoutSeconds: 10)
 
-            return "Connection test succeeded. Mount and unmount completed for \(remote.displayName)."
+            return L10n.format("Connection test succeeded. Mount and unmount completed for %@.", remote.displayName)
         } catch {
             let stillMounted: Bool
             if mountedDuringTest {
@@ -725,7 +731,7 @@ actor MountManager {
                 remoteID: remote.id,
                 operationID: operationID
             )) != nil {
-                throw AppError.processFailure("Unmount did not complete for \(remote.localMountPoint).")
+                throw AppError.processFailure(L10n.format("Unmount did not complete for %@.", remote.localMountPoint))
             }
 
             let status = RemoteStatus(
@@ -912,7 +918,7 @@ actor MountManager {
             }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
-        throw AppError.timeout("Unmount did not complete in time for \(mountPoint).")
+        throw AppError.timeout(L10n.format("Unmount did not complete in time for %@.", mountPoint))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -975,7 +981,7 @@ actor MountManager {
             }
         }
 
-        throw lastError ?? AppError.unknown("Mount failed")
+        throw lastError ?? AppError.unknown(L10n.tr("Mount failed"))
     }
 
     /// Beginner note: A stale FUSE mount can surface as local mount-point creation failures.
@@ -1007,7 +1013,7 @@ actor MountManager {
 
         if exists {
             guard isDir.boolValue else {
-                throw AppError.validationFailed(["Local mount point is not a directory: \(normalized)"])
+                throw AppError.validationFailed([L10n.format("Local mount point is not a directory: %@", normalized)])
             }
             return
         }
@@ -1020,11 +1026,11 @@ actor MountManager {
             diagnostics.append(level: .info, category: "mount", message: "Created missing local mount point: \(normalized)")
         } catch {
             throw AppError.validationFailed([
-                "Local mount point could not be created: \(normalized). " +
-                "This can happen after a server restart leaves a stale mount path, or when macOS blocks writes to that folder. " +
-                "Disconnect the remote, wait a few seconds, then reconnect. " +
-                "If it keeps failing, choose a different local mount folder. " +
-                "Details: \(error.localizedDescription)"
+                L10n.format(
+                    "Local mount point could not be created: %@. This can happen after a server restart leaves a stale mount path, or when macOS blocks writes to that folder. Disconnect the remote, wait a few seconds, then reconnect. If it keeps failing, choose a different local mount folder. Details: %@",
+                    normalized,
+                    error.localizedDescription
+                )
             ])
         }
     }
@@ -1070,7 +1076,7 @@ actor MountManager {
             try throwIfCancelled()
 
             if result.timedOut {
-                throw AppError.timeout("sshfs connect timed out.")
+                throw AppError.timeout(L10n.tr("sshfs connect timed out."))
             }
 
             if result.exitCode != 0 {
@@ -1078,7 +1084,9 @@ actor MountManager {
                 let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
                 let rawMessage = stderr.isEmpty ? stdout : stderr
                 let message = friendlyMountError(rawMessage, remote: remote)
-                throw AppError.processFailure(message.isEmpty ? "sshfs failed with exit code \(result.exitCode)" : message)
+                throw AppError.processFailure(
+                    message.isEmpty ? L10n.format("sshfs failed with exit code %lld", Int64(result.exitCode)) : message
+                )
             }
 
             // After sshfs exits successfully, the mount should show up quickly.
@@ -1087,7 +1095,7 @@ actor MountManager {
             let detectionDeadline = Date().addingTimeInterval(5)
             while Date() < detectionDeadline {
                 if Task.isCancelled {
-                    throw AppError.timeout("Mount operation was cancelled.")
+                    throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
                 }
 
                 do {
@@ -1135,7 +1143,7 @@ actor MountManager {
                     }
                 } catch {
                     if Task.isCancelled {
-                        throw AppError.timeout("Mount operation was cancelled.")
+                        throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
                     }
                     // Mount-table probes can be flaky immediately after wake.
                     // Keep trying until detection deadline instead of failing connect immediately.
@@ -1148,12 +1156,12 @@ actor MountManager {
                 try await Task.sleep(nanoseconds: 250_000_000)
             }
 
-            throw AppError.processFailure("sshfs reported success, but mount was not detected.")
+            throw AppError.processFailure(L10n.tr("sshfs reported success, but mount was not detected."))
         }
 
         if remote.authMode == .password {
             guard let password, !password.isEmpty else {
-                throw AppError.validationFailed(["Password is required for password authentication."])
+                throw AppError.validationFailed([L10n.tr("Password is required for password authentication.")])
             }
 
             return try await askpassHelper.withContext(password: password) { context in
@@ -1321,7 +1329,7 @@ actor MountManager {
             return fallback
         }
 
-        throw AppError.processFailure("Failed to inspect mounts: \(lastFailure)")
+        throw AppError.processFailure(L10n.format("Failed to inspect mounts: %@", lastFailure))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -1525,11 +1533,14 @@ actor MountManager {
 
         let lower = trimmed.lowercased()
         if lower.contains("permission denied"), remote.remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines) == "/" {
-            return "Permission denied for remote path '/'. On Windows OpenSSH, select a path like /C:/Users/\(remote.username) and retry."
+            return L10n.format(
+                "Permission denied for remote path '/'. On Windows OpenSSH, select a path like /C:/Users/%@ and retry.",
+                remote.username
+            )
         }
 
         if lower.contains("permission denied"), remote.authMode == .password {
-            return "Authentication failed. Verify password and Windows OpenSSH settings for PasswordAuthentication/keyboard-interactive."
+            return L10n.tr("Authentication failed. Verify password and Windows OpenSSH settings for PasswordAuthentication/keyboard-interactive.")
         }
 
         return trimmed
