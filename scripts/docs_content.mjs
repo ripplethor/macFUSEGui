@@ -161,9 +161,14 @@ const englishContent = {
     labels: {
       relatedGuides: "Related guides",
       breadcrumbHome: "Home",
+      breadcrumb: "Breadcrumb",
       localeSwitcher: "Choose a language",
       guideSection: "Guide map",
       productHighlights: "Why teams use macFUSEGui",
+      stepLabel: "Step",
+      themeToggle: "Toggle Theme",
+      switchToDarkMode: "Switch to Dark Mode",
+      switchToLightMode: "Switch to Light Mode",
     },
     copyright: "macFUSEGui. Open Source Contributors.",
   },
@@ -190,6 +195,16 @@ const englishContent = {
           { kind: "download", style: "primary", labelKey: "downloadDmg", id: "download-btn" },
           { kind: "page", pageId: "product", style: "secondary" },
           { kind: "page", pageId: "install", style: "secondary" },
+        ],
+      },
+      heroSpotlight: {
+        versionFallback: "latest",
+        title: "SSHFS mounts with status, recovery, and macOS-native controls.",
+        bullets: [
+          "Independent connect and disconnect for each remote.",
+          "Keychain-backed credentials instead of copied secrets.",
+          "Recovery after sleep, wake, Wi-Fi changes, and stale unmounts.",
+          "Diagnostics you can copy before escalating a mount failure.",
         ],
       },
       guideSection: {
@@ -666,9 +681,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "相关指南",
         breadcrumbHome: "首页",
+        breadcrumb: "面包屑导航",
         localeSwitcher: "选择语言",
         guideSection: "指南地图",
         productHighlights: "为什么团队选择 macFUSEGui",
+        stepLabel: "步骤",
+        themeToggle: "切换主题",
+        switchToDarkMode: "切换到深色模式",
+        switchToLightMode: "切换到浅色模式",
       },
       copyright: "macFUSEGui。开源贡献者。",
     },
@@ -706,9 +726,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "関連ガイド",
         breadcrumbHome: "ホーム",
+        breadcrumb: "パンくずリスト",
         localeSwitcher: "言語を選択",
         guideSection: "ガイド一覧",
         productHighlights: "macFUSEGui が選ばれる理由",
+        stepLabel: "手順",
+        themeToggle: "テーマを切り替える",
+        switchToDarkMode: "ダークモードに切り替える",
+        switchToLightMode: "ライトモードに切り替える",
       },
       copyright: "macFUSEGui。オープンソース貢献者。",
     },
@@ -746,9 +771,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "Verwandte Leitfäden",
         breadcrumbHome: "Start",
+        breadcrumb: "Pfadnavigation",
         localeSwitcher: "Sprache wählen",
         guideSection: "Leitfadenübersicht",
         productHighlights: "Warum Teams macFUSEGui nutzen",
+        stepLabel: "Schritt",
+        themeToggle: "Theme umschalten",
+        switchToDarkMode: "Zum Dunkelmodus wechseln",
+        switchToLightMode: "Zum Hellmodus wechseln",
       },
       copyright: "macFUSEGui. Open-Source-Mitwirkende.",
     },
@@ -786,9 +816,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "Guides liés",
         breadcrumbHome: "Accueil",
+        breadcrumb: "Fil d'Ariane",
         localeSwitcher: "Choisir la langue",
         guideSection: "Carte des guides",
         productHighlights: "Pourquoi les équipes choisissent macFUSEGui",
+        stepLabel: "Étape",
+        themeToggle: "Changer de thème",
+        switchToDarkMode: "Passer au mode sombre",
+        switchToLightMode: "Passer au mode clair",
       },
       copyright: "macFUSEGui. Contributeurs open source.",
     },
@@ -826,9 +861,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "Guias relacionados",
         breadcrumbHome: "Início",
+        breadcrumb: "Trilha de navegação",
         localeSwitcher: "Escolher idioma",
         guideSection: "Mapa dos guias",
         productHighlights: "Por que equipes usam macFUSEGui",
+        stepLabel: "Passo",
+        themeToggle: "Alternar tema",
+        switchToDarkMode: "Mudar para o modo escuro",
+        switchToLightMode: "Mudar para o modo claro",
       },
       copyright: "macFUSEGui. Colaboradores de código aberto.",
     },
@@ -866,9 +906,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "Guías relacionadas",
         breadcrumbHome: "Inicio",
+        breadcrumb: "Ruta de navegación",
         localeSwitcher: "Elegir idioma",
         guideSection: "Mapa de guías",
         productHighlights: "Por qué los equipos usan macFUSEGui",
+        stepLabel: "Paso",
+        themeToggle: "Cambiar tema",
+        switchToDarkMode: "Cambiar al modo oscuro",
+        switchToLightMode: "Cambiar al modo claro",
       },
       copyright: "macFUSEGui. Colaboradores de código abierto.",
     },
@@ -906,9 +951,14 @@ const localeUiOverrides = {
       labels: {
         relatedGuides: "관련 가이드",
         breadcrumbHome: "홈",
+        breadcrumb: "탐색 경로",
         localeSwitcher: "언어 선택",
         guideSection: "가이드 맵",
         productHighlights: "팀이 macFUSEGui를 선택하는 이유",
+        stepLabel: "단계",
+        themeToggle: "테마 전환",
+        switchToDarkMode: "다크 모드로 전환",
+        switchToLightMode: "라이트 모드로 전환",
       },
       copyright: "macFUSEGui. 오픈 소스 기여자.",
     },
@@ -935,6 +985,16 @@ const localePageOverrides = {
             "别再反复拼接脆弱的挂载命令。macFUSEGui 为 macOS 团队提供专注的 macFUSE GUI，用于 SSHFS，包含按远程分离的控制、Keychain 凭证、诊断快照，以及睡眠和网络变化后的恢复能力。",
           supporting:
             "先选对与你搜索意图匹配的指南，再下载正确的构建，把 Apple Silicon 与 Intel 安装流程都保持在可重复、可支持的路径上。",
+        },
+        heroSpotlight: {
+          versionFallback: "最新",
+          title: "SSHFS 挂载具备状态、恢复能力，以及符合 macOS 习惯的原生控制。",
+          bullets: [
+            "每个远程都可独立连接和断开。",
+            "凭证保存在 Keychain，而不是复制散落的机密信息。",
+            "可在睡眠、唤醒、Wi-Fi 变化和陈旧卸载后执行恢复。",
+            "在上报挂载失败前，可先复制诊断信息。",
+          ],
         },
         guideSection: {
           title: "选择与你搜索意图匹配的指南",
@@ -1291,6 +1351,16 @@ const localePageOverrides = {
           supporting:
             "まず検索意図に合うガイドを選び、次に正しいビルドをダウンロードして、Apple Silicon と Intel の導入を再現可能な手順にそろえてください。",
         },
+        heroSpotlight: {
+          versionFallback: "最新",
+          title: "状態、回復、macOS ネイティブの操作で SSHFS マウントを管理。",
+          bullets: [
+            "各リモートを個別に接続・切断できます。",
+            "認証情報はコピーした秘密情報ではなく Keychain で管理されます。",
+            "スリープ、復帰、Wi-Fi の変化、古いアンマウント状態のあとも回復できます。",
+            "マウント失敗をエスカレーションする前に診断情報をコピーできます。",
+          ],
+        },
         guideSection: {
           title: "検索意図に合うガイドを選ぶ",
           intro:
@@ -1628,6 +1698,16 @@ const localePageOverrides = {
           supporting:
             "Wählen Sie zuerst den passenden Leitfaden, laden Sie dann den richtigen Build herunter und halten Sie Apple-Silicon- und Intel-Installationen auf einem sauberen, wiederholbaren Pfad.",
         },
+        heroSpotlight: {
+          versionFallback: "aktuell",
+          title: "SSHFS-Mounts mit Status, Wiederherstellung und macOS-nativer Steuerung.",
+          bullets: [
+            "Jedes Remote kann unabhängig verbunden und getrennt werden.",
+            "Keychain-gestützte Zugangsdaten statt kopierter Geheimnisse.",
+            "Wiederherstellung nach Ruhezustand, Aufwachen, WLAN-Wechseln und veralteten Unmounts.",
+            "Diagnosen zum Kopieren, bevor Sie einen Mount-Fehler eskalieren.",
+          ],
+        },
         guideSection: {
           title: "Wählen Sie den Leitfaden für Ihre Suchabsicht",
           intro:
@@ -1881,6 +1961,16 @@ const localePageOverrides = {
           supporting:
             "Choisissez d'abord le guide qui correspond à votre intention, puis téléchargez la bonne build pour garder une installation propre sur Apple Silicon comme sur Intel.",
         },
+        heroSpotlight: {
+          versionFallback: "dernière",
+          title: "Des montages SSHFS avec état, récupération et contrôles natifs pour macOS.",
+          bullets: [
+            "Connexion et déconnexion indépendantes pour chaque accès distant.",
+            "Identifiants protégés par le Trousseau plutôt que secrets copiés.",
+            "Récupération après veille, sortie de veille, changements de Wi-Fi et démontages obsolètes.",
+            "Diagnostics copiables avant d'escalader un échec de montage.",
+          ],
+        },
         guideSection: {
           title: "Choisir le guide adapté à votre recherche",
           intro:
@@ -2031,6 +2121,16 @@ const localePageOverrides = {
             "Pare de remontar comandos frágeis manualmente. O macFUSEGui entrega uma macFUSE GUI focada em SSHFS no macOS, com ações por remote, credenciais no Keychain, diagnósticos e recuperação após sleep ou mudança de rede.",
           supporting:
             "Escolha primeiro o guia certo, depois baixe a build correta e mantenha instalações Apple Silicon e Intel em um fluxo limpo e repetível.",
+        },
+        heroSpotlight: {
+          versionFallback: "mais recente",
+          title: "Montagens SSHFS com status, recuperação e controles nativos do macOS.",
+          bullets: [
+            "Conecte e desconecte cada remote de forma independente.",
+            "Credenciais no Keychain em vez de segredos copiados.",
+            "Recuperação após suspensão, despertar, mudanças de Wi-Fi e desmontagens obsoletas.",
+            "Diagnósticos que você pode copiar antes de escalar uma falha de montagem.",
+          ],
         },
         guideSection: {
           title: "Escolha o guia que combina com a sua busca",
@@ -2199,6 +2299,16 @@ const localePageOverrides = {
           supporting:
             "Elige primero la guía adecuada, descarga después la build correcta y mantén Apple Silicon e Intel en un flujo limpio y repetible.",
         },
+        heroSpotlight: {
+          versionFallback: "última",
+          title: "Montajes SSHFS con estado, recuperación y controles nativos de macOS.",
+          bullets: [
+            "Conexión y desconexión independientes para cada remote.",
+            "Credenciales respaldadas por Keychain en lugar de secretos copiados.",
+            "Recuperación tras suspensión, reactivación, cambios de Wi-Fi y desmontajes obsoletos.",
+            "Diagnósticos que puedes copiar antes de escalar un fallo de montaje.",
+          ],
+        },
         guideSection: {
           title: "Elige la guía que encaja con tu intención de búsqueda",
           intro:
@@ -2365,6 +2475,16 @@ const localePageOverrides = {
             "이제 취약한 마운트 명령을 계속 다시 만들 필요가 없습니다. macFUSEGui는 macOS에서 SSHFS를 위한 macFUSE GUI로서 remote별 제어, Keychain 자격 증명, 진단, 절전 및 네트워크 변경 이후의 복구를 제공합니다.",
           supporting:
             "먼저 검색 의도에 맞는 가이드를 고르고, 다음으로 올바른 빌드를 내려받아 Apple Silicon과 Intel 설치를 반복 가능하게 유지하세요.",
+        },
+        heroSpotlight: {
+          versionFallback: "최신",
+          title: "상태, 복구, macOS 네이티브 제어를 갖춘 SSHFS 마운트.",
+          bullets: [
+            "각 remote를 독립적으로 연결하고 연결 해제할 수 있습니다.",
+            "복사된 비밀 정보 대신 Keychain 기반 자격 증명을 사용합니다.",
+            "절전, 깨우기, Wi-Fi 변경, 오래된 마운트 해제 뒤에도 복구합니다.",
+            "마운트 실패를 상위로 올리기 전에 복사할 수 있는 진단 정보를 제공합니다.",
+          ],
         },
         guideSection: {
           title: "검색 의도에 맞는 가이드 선택",

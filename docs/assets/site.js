@@ -115,7 +115,9 @@ function updateThemeUI() {
         themeToggle.setAttribute("aria-pressed", String(isDark));
     }
     if (themeToggleLabel) {
-        themeToggleLabel.textContent = isDark ? "Switch to Light Mode" : "Switch to Dark Mode";
+        const darkLabel = themeToggleLabel.dataset.darkLabel || "Switch to Dark Mode";
+        const lightLabel = themeToggleLabel.dataset.lightLabel || "Switch to Light Mode";
+        themeToggleLabel.textContent = isDark ? lightLabel : darkLabel;
     }
 }
 

@@ -199,11 +199,16 @@ function renderHeader(currentLocale, currentPage, localeContent) {
         <div class="flex items-center gap-3">
           ${renderLocaleSwitcher(currentLocale, currentPage, localeContent, true)}
           <button
-            aria-label="Toggle Theme"
+            aria-label="${escapeHtml(localeContent.ui.labels.themeToggle)}"
             class="rounded-full p-2 text-gray-600 backdrop-blur-sm hover:bg-gray-200/50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-300 dark:hover:bg-gray-800/50"
             id="theme-toggle"
           >
-            <span class="sr-only" id="theme-toggle-label">Switch to Dark Mode</span>
+            <span
+              class="sr-only"
+              data-dark-label="${escapeHtml(localeContent.ui.labels.switchToDarkMode)}"
+              data-light-label="${escapeHtml(localeContent.ui.labels.switchToLightMode)}"
+              id="theme-toggle-label"
+            >${escapeHtml(localeContent.ui.labels.switchToDarkMode)}</span>
             <svg aria-hidden="true" class="hidden h-5 w-5 text-yellow-400 dark:block" fill="none" focusable="false" viewBox="0 0 24 24" stroke="currentColor">
               <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
             </svg>
@@ -388,6 +393,8 @@ function renderFaq(homeContent) {
 function renderHomePage(currentLocale, currentPage, localeContent) {
   const homeContent = localeContent.pages.home;
   const guidePages = pageDefinitions.filter((page) => page.id !== "home");
+  const stepLabel = localeContent.ui.labels.stepLabel;
+  const spotlight = homeContent.heroSpotlight;
 
   return `
     <main class="relative z-10">
@@ -411,14 +418,11 @@ function renderHomePage(currentLocale, currentPage, localeContent) {
               <div class="glass-panel rounded-3xl border border-white/10 p-6 text-left md:p-8">
                 <div class="flex items-center justify-between">
                   <div class="text-sm font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">macFUSEGui</div>
-                  <div class="font-mono text-xs text-gray-500" id="hero-version">latest</div>
+                  <div class="font-mono text-xs text-gray-500" id="hero-version">${escapeHtml(spotlight.versionFallback)}</div>
                 </div>
-                <p class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">SSHFS mounts with status, recovery, and macOS-native controls.</p>
+                <p class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">${escapeHtml(spotlight.title)}</p>
                 <ul class="mt-5 space-y-3 leading-relaxed text-gray-700 dark:text-gray-300">
-                  <li>Independent connect and disconnect for each remote.</li>
-                  <li>Keychain-backed credentials instead of copied secrets.</li>
-                  <li>Recovery after sleep, wake, Wi-Fi changes, and stale unmounts.</li>
-                  <li>Diagnostics you can copy before escalating a mount failure.</li>
+                  ${spotlight.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}
                 </ul>
               </div>
               <div class="glass-panel rounded-3xl border border-white/10 p-6 text-left md:p-8">
@@ -428,7 +432,7 @@ function renderHomePage(currentLocale, currentPage, localeContent) {
                     .map(
                       (step, index) => `
                         <div class="rounded-2xl border border-white/10 bg-white/35 p-4 dark:bg-black/20">
-                          <div class="text-sm font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Step ${index + 1}</div>
+                          <div class="text-sm font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">${escapeHtml(stepLabel)} ${index + 1}</div>
                           <p class="mt-2 text-base font-semibold text-gray-900 dark:text-white">${step.title}</p>
                           <p class="mt-2 leading-relaxed text-gray-700 dark:text-gray-300">${step.body}</p>
                         </div>`,
@@ -528,7 +532,7 @@ function renderHomePage(currentLocale, currentPage, localeContent) {
                   .map(
                     (step, index) => `
                       <article class="rounded-2xl border border-white/10 bg-white/40 p-5 dark:bg-black/20">
-                        <div class="text-sm font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Step ${index + 1}</div>
+                        <div class="text-sm font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">${escapeHtml(stepLabel)} ${index + 1}</div>
                         <p class="mt-3 text-lg font-bold text-gray-900 dark:text-white">${step.title}</p>
                         <p class="mt-3 leading-relaxed text-gray-700 dark:text-gray-300">${step.body}</p>
                       </article>`,
@@ -562,7 +566,7 @@ function renderGuidePage(currentLocale, currentPage, localeContent) {
   return `
     <main class="relative z-10 py-20 sm:py-24">
       <div class="mx-auto max-w-5xl space-y-10 px-4 sm:px-6 lg:px-8">
-        <nav class="text-sm text-gray-600 dark:text-gray-300" aria-label="Breadcrumb">
+        <nav class="text-sm text-gray-600 dark:text-gray-300" aria-label="${escapeHtml(localeContent.ui.labels.breadcrumb)}" data-breadcrumb="true">
           <ol class="flex flex-wrap items-center gap-2">
             <li><a class="hover:text-blue-600 dark:hover:text-blue-400" href="${escapeHtml(pageHref(currentLocale, currentPage, currentLocale, pageById.get("home")))}">${escapeHtml(localeContent.ui.labels.breadcrumbHome)}</a></li>
             <li aria-hidden="true">/</li>

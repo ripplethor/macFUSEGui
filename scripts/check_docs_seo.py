@@ -83,7 +83,10 @@ class PageInspector(HTMLParser):
         elif tag in {"h2", "h3", "h4", "h5", "h6"}:
             self._current_heading = tag
             self._heading_chunks = []
-        elif tag == "nav" and attr_map.get("aria-label") == "Breadcrumb":
+        elif tag == "nav" and (
+            attr_map.get("data-breadcrumb") == "true"
+            or attr_map.get("aria-label") == "Breadcrumb"
+        ):
             self.breadcrumb_nav_count += 1
         elif tag == "section" and attr_map.get("data-related-guides") == "true":
             self.related_guides_count += 1
