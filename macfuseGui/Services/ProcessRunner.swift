@@ -112,17 +112,15 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         var stdoutData = Data()
                         var stderrData = Data()
                         let captureLock = NSLock()
-                        var captureActive = true
+                        var captureHandlersStopped = false
                         var drained = false
 
+                        let stdoutReadHandle = stdoutPipe.fileHandleForReading
+                        let stderrReadHandle = stderrPipe.fileHandleForReading
+
                         /// Beginner note: This method is one step in the feature workflow for this file.
-                        func appendBytes(_ chunk: Data, toStdout: Bool, respectCaptureState: Bool) {
+                        func appendBytes(_ chunk: Data, toStdout: Bool) {
                             guard !chunk.isEmpty else { return }
-                            captureLock.lock()
-                            defer { captureLock.unlock() }
-                            if respectCaptureState, !captureActive {
-                                return
-                            }
                             if toStdout {
                                 stdoutData.append(chunk)
                             } else {
@@ -131,17 +129,60 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         }
 
                         /// Beginner note: This method is one step in the feature workflow for this file.
-                        func deactivateCapture() {
+                        func configureNonBlockingRead(_ handle: FileHandle) {
+                            let fd = handle.fileDescriptor
+                            let currentFlags = fcntl(fd, F_GETFL)
+                            guard currentFlags >= 0, (currentFlags & O_NONBLOCK) == 0 else {
+                                return
+                            }
+                            _ = fcntl(fd, F_SETFL, currentFlags | O_NONBLOCK)
+                        }
+
+                        /// Beginner note: This method is one step in the feature workflow for this file.
+                        /// It drains currently available bytes without ever calling NSFileHandle.availableData,
+                        /// which can raise an Objective-C exception from the fd monitoring queue during teardown.
+                        @discardableResult
+                        func drainReadableHandle(_ handle: FileHandle, toStdout: Bool) -> Bool {
                             captureLock.lock()
-                            captureActive = false
-                            captureLock.unlock()
+                            defer { captureLock.unlock() }
+
+                            var buffer = [UInt8](repeating: 0, count: 16_384)
+                            while true {
+                                errno = 0
+                                let bytesRead = Darwin.read(handle.fileDescriptor, &buffer, buffer.count)
+                                if bytesRead > 0 {
+                                    let chunk = Data(buffer[0..<Int(bytesRead)])
+                                    appendBytes(chunk, toStdout: toStdout)
+                                    continue
+                                }
+                                if bytesRead == 0 {
+                                    return true
+                                }
+                                if errno == EINTR {
+                                    continue
+                                }
+                                if errno == EAGAIN || errno == EWOULDBLOCK {
+                                    return false
+                                }
+                                if errno == EBADF {
+                                    return true
+                                }
+                                return false
+                            }
                         }
 
                         /// Beginner note: This method is one step in the feature workflow for this file.
                         func stopCaptureHandlers() {
-                            deactivateCapture()
-                            stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                            stderrPipe.fileHandleForReading.readabilityHandler = nil
+                            captureLock.lock()
+                            if captureHandlersStopped {
+                                captureLock.unlock()
+                                return
+                            }
+                            captureHandlersStopped = true
+                            captureLock.unlock()
+
+                            stdoutReadHandle.readabilityHandler = nil
+                            stderrReadHandle.readabilityHandler = nil
                         }
 
                         /// Beginner note: This method is one step in the feature workflow for this file.
@@ -154,54 +195,23 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                             drained = true
                             captureLock.unlock()
 
-                            // Use non-blocking reads: timed-out commands can leave descendants holding
-                            // stdout/stderr open, and readDataToEndOfFile may otherwise block indefinitely.
-                            func drainPipe(_ handle: FileHandle, toStdout: Bool) {
-                                let fd = handle.fileDescriptor
-                                let originalFlags = fcntl(fd, F_GETFL)
-                                guard originalFlags >= 0 else {
-                                    return
-                                }
-                                _ = fcntl(fd, F_SETFL, originalFlags | O_NONBLOCK)
-                                defer {
-                                    _ = fcntl(fd, F_SETFL, originalFlags)
-                                }
+                            drainReadableHandle(stdoutReadHandle, toStdout: true)
+                            drainReadableHandle(stderrReadHandle, toStdout: false)
+                        }
 
-                                var buffer = [UInt8](repeating: 0, count: 16_384)
-                                while true {
-                                    errno = 0
-                                    let bytesRead = Darwin.read(fd, &buffer, buffer.count)
-                                    if bytesRead > 0 {
-                                        let chunk = Data(buffer[0..<Int(bytesRead)])
-                                        // Tail drain intentionally bypasses capture state so teardown keeps late bytes.
-                                        appendBytes(chunk, toStdout: toStdout, respectCaptureState: false)
-                                        continue
-                                    }
-                                    if bytesRead == 0 {
-                                        return
-                                    }
-                                    if errno == EINTR {
-                                        continue
-                                    }
-                                    if errno == EAGAIN || errno == EWOULDBLOCK {
-                                        return
-                                    }
-                                    return
-                                }
+                        configureNonBlockingRead(stdoutReadHandle)
+                        configureNonBlockingRead(stderrReadHandle)
+
+                        stdoutReadHandle.readabilityHandler = { handle in
+                            if drainReadableHandle(handle, toStdout: true) {
+                                handle.readabilityHandler = nil
                             }
-
-                            drainPipe(stdoutPipe.fileHandleForReading, toStdout: true)
-                            drainPipe(stderrPipe.fileHandleForReading, toStdout: false)
                         }
 
-                        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-                            let chunk = handle.availableData
-                            appendBytes(chunk, toStdout: true, respectCaptureState: true)
-                        }
-
-                        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-                            let chunk = handle.availableData
-                            appendBytes(chunk, toStdout: false, respectCaptureState: true)
+                        stderrReadHandle.readabilityHandler = { handle in
+                            if drainReadableHandle(handle, toStdout: false) {
+                                handle.readabilityHandler = nil
+                            }
                         }
 
                         process.terminationHandler = { _ in
@@ -233,8 +243,9 @@ final class ProcessRunner: ProcessRunning, @unchecked Sendable {
                         if waitResult == .timedOut {
                             didTimeout = true
 
-                            // Stop accepting handler appends before teardown; handlers are removed at final cleanup.
-                            deactivateCapture()
+                            // Shut down async monitoring before terminate/SIGKILL so teardown only uses
+                            // explicit non-blocking reads and never races through NSFileHandle monitoring.
+                            stopCaptureHandlers()
                             let timeoutHandle = self.beginTermination(
                                 commandID: commandID,
                                 fallback: ProcessHandle(pid: pid, processGroupID: processGroupID)

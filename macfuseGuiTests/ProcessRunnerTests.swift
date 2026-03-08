@@ -96,6 +96,37 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertTrue(result.timedOut || result.exitCode != 0, "Cancelled process should not report a clean successful exit.")
     }
 
+    func testConcurrentShortLivedProcessesCaptureOutputReliably() async throws {
+        let runner = ProcessRunner()
+        let processCount = 24
+
+        try await withThrowingTaskGroup(of: ProcessResult.self) { group in
+            for index in 0..<processCount {
+                group.addTask {
+                    try await runner.run(
+                        executable: "/bin/sh",
+                        arguments: [
+                            "-c",
+                            "i=0; while [ $i -lt 40 ]; do echo out-\(index)-$i; echo err-\(index)-$i 1>&2; i=$((i+1)); done"
+                        ],
+                        timeout: 5
+                    )
+                }
+            }
+
+            var completed = 0
+            for try await result in group {
+                XCTAssertFalse(result.timedOut)
+                XCTAssertEqual(result.exitCode, 0)
+                XCTAssertTrue(result.stdout.contains("out-"))
+                XCTAssertTrue(result.stderr.contains("err-"))
+                completed += 1
+            }
+
+            XCTAssertEqual(completed, processCount)
+        }
+    }
+
     private func childPIDFromOutput(_ output: String) -> Int32? {
         for line in output.split(whereSeparator: \.isNewline) {
             let text = line.trimmingCharacters(in: .whitespacesAndNewlines)
