@@ -50,6 +50,12 @@ struct SettingsRootView: View {
             minHeight: Self.minimumWindowSize.height
         )
         .background(Color(NSColor.windowBackgroundColor))
+        .overlay(alignment: .bottomTrailing) {
+            SettingsResizeHint()
+                .padding(.trailing, 10)
+                .padding(.bottom, 8)
+                .allowsHitTesting(false)
+        }
         .sheet(item: $activeEditorSession) { session in
             RemoteEditorView(initialDraft: session.draft, remotesViewModel: viewModel) { savedID in
                 activeEditorSession = nil
@@ -697,6 +703,49 @@ struct SettingsRootView: View {
     private struct PendingRemoteDeletion: Identifiable {
         let id: UUID
         let displayName: String
+    }
+}
+
+private struct SettingsResizeHint: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Resize")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            SettingsResizeGrip()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.94))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
+    }
+}
+
+private struct SettingsResizeGrip: View {
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            gripLine(width: 8)
+                .offset(x: -6, y: -6)
+            gripLine(width: 12)
+                .offset(x: -3, y: -3)
+            gripLine(width: 16)
+        }
+        .frame(width: 18, height: 18)
+    }
+
+    private func gripLine(width: CGFloat) -> some View {
+        Capsule(style: .continuous)
+            .fill(Color.secondary.opacity(0.75))
+            .frame(width: width, height: 2)
+            .rotationEffect(.degrees(-45))
     }
 }
 
