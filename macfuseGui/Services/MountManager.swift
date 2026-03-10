@@ -25,6 +25,12 @@ actor MountManager {
         case failed(reason: String)
     }
 
+    private enum DFMountLookupResult {
+        case mounted(MountRecord)
+        case notMounted
+        case inconclusive
+    }
+
     private struct DirectoryQueryProbeStats {
         var timeoutEvents: Int = 0
         var deviceNotConfiguredEvents: Int = 0
@@ -1285,6 +1291,20 @@ actor MountManager {
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
         try throwIfCancelled()
+        switch try await currentMountRecordViaDFLookup(
+            for: normalizedMountPoint,
+            remoteID: remoteID,
+            operationID: operationID
+        ) {
+        case .mounted(let record):
+            return record
+        case .notMounted:
+            return nil
+        case .inconclusive:
+            break
+        }
+
+        try throwIfCancelled()
         let attemptStartedAt = Date()
         diagnostics.append(
             level: .debug,
@@ -1361,6 +1381,23 @@ actor MountManager {
         remoteID: UUID? = nil,
         operationID: UUID? = nil
     ) async throws -> MountRecord? {
+        switch try await currentMountRecordViaDFLookup(
+            for: mountPoint,
+            remoteID: remoteID,
+            operationID: operationID
+        ) {
+        case .mounted(let record):
+            return record
+        case .notMounted, .inconclusive:
+            return nil
+        }
+    }
+
+    private func currentMountRecordViaDFLookup(
+        for mountPoint: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil
+    ) async throws -> DFMountLookupResult {
         let startedAt = Date()
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
@@ -1382,24 +1419,24 @@ actor MountManager {
         )
 
         guard !result.timedOut, result.exitCode == 0 else {
-            return nil
+            return .inconclusive
         }
 
         let lines = result.stdout
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map(String.init)
         guard lines.count >= 2 else {
-            return nil
+            return .inconclusive
         }
 
         let dataLine = lines.last ?? ""
         guard let (source, mountedOn) = parsedDFLine(dataLine) else {
-            return nil
+            return .inconclusive
         }
         guard mountedOn == mountPoint else {
-            return nil
+            return .notMounted
         }
-        return MountRecord(source: source, mountPoint: mountedOn, filesystemType: "unknown")
+        return .mounted(MountRecord(source: source, mountPoint: mountedOn, filesystemType: "unknown"))
     }
 
     private func parsedDFLine(_ line: String) -> (source: String, mountedOn: String)? {

@@ -19,6 +19,12 @@ struct UnmountBlockingProcess: Equatable, Sendable {
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class UnmountService {
+    private enum DFMountLookupResult {
+        case mounted(MountRecord)
+        case notMounted
+        case inconclusive
+    }
+
     private let runner: ProcessRunning
     private let diagnostics: DiagnosticsService
     private let mountStateParser: MountStateParser
@@ -309,7 +315,7 @@ final class UnmountService {
 
         throw AppError.processFailure(
             L10n.format(
-                "Mount point is busy: %@. Close Finder windows or files using this mount and retry.",
+                "Mount point is busy: %@. Close Finder windows, Quick Look previews, or files using this mount and retry.",
                 mountPoint
             )
         )
@@ -408,6 +414,15 @@ final class UnmountService {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     private func currentMountRecord(for mountPoint: String, deadline: Date? = nil) async throws -> MountRecord? {
+        switch try await currentMountRecordViaDF(for: mountPoint, deadline: deadline) {
+        case .mounted(let record):
+            return record
+        case .notMounted:
+            return nil
+        case .inconclusive:
+            break
+        }
+
         let timeout = try effectiveTimeout(
             base: mountInspectionTimeout,
             deadline: deadline,
@@ -431,6 +446,16 @@ final class UnmountService {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     private func isMounted(_ mountPoint: String, deadline: Date? = nil) async throws -> Bool {
+        let dfLookup = try await currentMountRecordViaDF(for: mountPoint, deadline: deadline)
+        switch dfLookup {
+        case .mounted:
+            return true
+        case .notMounted:
+            return false
+        case .inconclusive:
+            break
+        }
+
         let mountTimeout = try effectiveTimeout(
             base: mountInspectionTimeout,
             deadline: deadline,
@@ -448,53 +473,13 @@ final class UnmountService {
             return mountStateParser.record(forMountPoint: mountPoint, from: records) != nil
         }
 
-        let dfTimeout = try effectiveTimeout(
-            base: dfFallbackTimeout,
-            deadline: deadline,
-            operation: "df fallback inspection",
-            mountPoint: mountPoint
+        // Conservative fallback: assume still mounted if we cannot confirm otherwise.
+        diagnostics.append(
+            level: .warning,
+            category: "unmount",
+            message: "mount inspection could not verify mount state for \(mountPoint) (exit=\(result.exitCode), timedOut=\(result.timedOut)); assuming mounted."
         )
-        let fallback = try await runner.run(
-            executable: "/bin/df",
-            arguments: ["-P", mountPoint],
-            timeout: dfTimeout
-        )
-
-        guard fallback.exitCode == 0, !fallback.timedOut else {
-            // Conservative fallback: assume still mounted if we cannot confirm otherwise.
-            diagnostics.append(
-                level: .warning,
-                category: "unmount",
-                message: "df fallback could not verify mount state for \(mountPoint) (exit=\(fallback.exitCode), timedOut=\(fallback.timedOut)); assuming mounted."
-            )
-            return true
-        }
-
-        let lines = fallback.stdout
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .map(String.init)
-        guard lines.count >= 2 else {
-            // Conservative fallback: assume still mounted if we cannot confirm otherwise.
-            diagnostics.append(
-                level: .warning,
-                category: "unmount",
-                message: "df fallback returned incomplete output for \(mountPoint); assuming mounted."
-            )
-            return true
-        }
-
-        let dataLine = lines.last ?? ""
-        guard let normalizedMountedField = normalizedDFMountedPath(from: dataLine) else {
-            // Conservative fallback: assume still mounted if we cannot confirm otherwise.
-            diagnostics.append(
-                level: .warning,
-                category: "unmount",
-                message: "df fallback could not parse mounted path for \(mountPoint); assuming mounted."
-            )
-            return true
-        }
-
-        return normalizedMountedField == mountPoint
+        return true
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -502,15 +487,52 @@ final class UnmountService {
         URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
-    private func normalizedDFMountedPath(from line: String) -> String? {
+    private func currentMountRecordViaDF(for mountPoint: String, deadline: Date? = nil) async throws -> DFMountLookupResult {
+        let timeout = try effectiveTimeout(
+            base: dfFallbackTimeout,
+            deadline: deadline,
+            operation: "df fallback inspection",
+            mountPoint: mountPoint
+        )
+        let result = try await runner.run(
+            executable: "/bin/df",
+            arguments: ["-P", mountPoint],
+            timeout: timeout
+        )
+
+        guard result.exitCode == 0, !result.timedOut else {
+            return .inconclusive
+        }
+
+        let lines = result.stdout
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+        guard lines.count >= 2 else {
+            return .inconclusive
+        }
+
+        let dataLine = lines.last ?? ""
+        guard let (source, mountedOn) = parsedDFRecord(from: dataLine) else {
+            return .inconclusive
+        }
+        guard mountedOn == mountPoint else {
+            return .notMounted
+        }
+
+        return .mounted(MountRecord(source: source, mountPoint: mountedOn, filesystemType: "unknown"))
+    }
+
+    private func parsedDFRecord(from line: String) -> (source: String, mountedOn: String)? {
         let fields = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         guard fields.count >= 6 else {
             return nil
         }
 
+        let source = fields[0]
         let mountedField = fields.dropFirst(5).joined(separator: " ")
         let decodedMountedField = mountStateParser.decodeEscapedMountField(mountedField)
-        return URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
+        let mountedOn = URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
+        return (source, mountedOn)
     }
 
     /// Beginner note: This method clamps per-command timeouts to the remaining

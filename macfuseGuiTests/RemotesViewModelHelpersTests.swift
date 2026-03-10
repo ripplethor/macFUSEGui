@@ -283,7 +283,10 @@ final class RemotesViewModelHelpersTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 100)
         )
 
-        let status = RemotesViewModel.statusAfterTimeoutCleanup(refreshed)
+        let status = RemotesViewModel.statusAfterTimeoutCleanup(
+            refreshed,
+            timedOutIntent: .connect
+        )
 
         XCTAssertEqual(status.state, .connected)
         XCTAssertEqual(status.mountedPath, "/tmp/live-mount")
@@ -299,11 +302,53 @@ final class RemotesViewModelHelpersTests: XCTestCase {
             updatedAt: Date(timeIntervalSince1970: 200)
         )
 
-        let status = RemotesViewModel.statusAfterTimeoutCleanup(refreshed)
+        let status = RemotesViewModel.statusAfterTimeoutCleanup(
+            refreshed,
+            timedOutIntent: .connect
+        )
 
         XCTAssertEqual(status.state, .disconnected)
         XCTAssertEqual(status.lastError, "Connection reset after timeout.")
         XCTAssertNotEqual(status.updatedAt, Date(timeIntervalSince1970: 200))
+    }
+
+    func testDisconnectTimeoutCleanupClearsErrorWhenUnmountFinished() {
+        let refreshed = RemoteStatus(
+            state: .disconnected,
+            mountedPath: nil,
+            lastError: nil,
+            updatedAt: Date(timeIntervalSince1970: 300)
+        )
+
+        let status = RemotesViewModel.statusAfterTimeoutCleanup(
+            refreshed,
+            timedOutIntent: .disconnect,
+            timeoutMessage: "Disconnect timed out."
+        )
+
+        XCTAssertEqual(status.state, .disconnected)
+        XCTAssertNil(status.lastError)
+        XCTAssertNotEqual(status.updatedAt, Date(timeIntervalSince1970: 300))
+    }
+
+    func testDisconnectTimeoutCleanupPreservesFailureWhenMountStillPresent() {
+        let refreshed = RemoteStatus(
+            state: .connected,
+            mountedPath: "/tmp/live-mount",
+            lastError: nil,
+            updatedAt: Date(timeIntervalSince1970: 400)
+        )
+
+        let status = RemotesViewModel.statusAfterTimeoutCleanup(
+            refreshed,
+            timedOutIntent: .disconnect,
+            timeoutMessage: "Disconnect timed out after 10s."
+        )
+
+        XCTAssertEqual(status.state, .error)
+        XCTAssertEqual(status.mountedPath, "/tmp/live-mount")
+        XCTAssertEqual(status.lastError, "Disconnect timed out after 10s.")
+        XCTAssertNotEqual(status.updatedAt, Date(timeIntervalSince1970: 400))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

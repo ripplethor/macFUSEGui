@@ -323,7 +323,7 @@ final class ValidationServiceTests: XCTestCase {
                 currentState: .disconnecting,
                 disconnectWatchdogTimeout: 12
             ),
-            "Disconnect timed out after 12s. Close files using the mount, then retry."
+            "Disconnect timed out after 12s. Close Finder windows, Quick Look previews, or files using the mount, then retry."
         )
         XCTAssertEqual(
             RemotesViewModel.watchdogTimeoutMessage(

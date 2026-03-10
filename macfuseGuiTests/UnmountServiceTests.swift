@@ -62,6 +62,28 @@ final class UnmountServiceTests: XCTestCase {
         XCTAssertTrue(didAttemptUnmount)
     }
 
+    /// Beginner note: Healthy targeted df probes should avoid waiting on slow global mount enumeration.
+    func testUnmountPrefersFastDFProbeBeforeGlobalMountInspection() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/slow-mount-enumeration"
+        let runner = FakeDFFallbackUnmountRunner(
+            mountedPoints: [mountPoint],
+            mountDelay: 3.2
+        )
+        let service = UnmountService(
+            runner: runner,
+            diagnostics: DiagnosticsService(),
+            mountStateParser: MountStateParser()
+        )
+
+        let startedAt = Date()
+        try await service.unmount(mountPoint: mountPoint)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        let didAttemptUnmount = await runner.didAttemptUnmount(for: mountPoint)
+        XCTAssertTrue(didAttemptUnmount)
+        XCTAssertLessThan(elapsed, 1.0, "Unmount should stay on the targeted df path when it can confirm state.")
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func makeService() -> UnmountService {
         UnmountService(
@@ -75,9 +97,11 @@ final class UnmountServiceTests: XCTestCase {
 private actor FakeDFFallbackUnmountRunner: ProcessRunning {
     private var mountedPoints: Set<String>
     private var unmountAttempts: Set<String> = []
+    private let mountDelay: TimeInterval
 
-    init(mountedPoints: Set<String>) {
+    init(mountedPoints: Set<String>, mountDelay: TimeInterval = 0) {
         self.mountedPoints = mountedPoints
+        self.mountDelay = mountDelay
     }
 
     func run(
@@ -90,13 +114,17 @@ private actor FakeDFFallbackUnmountRunner: ProcessRunning {
         let start = Date()
 
         if executable == "/sbin/mount" {
+            if mountDelay > 0 {
+                let boundedDelay = min(mountDelay, timeout + 0.05)
+                try? await Task.sleep(nanoseconds: UInt64(boundedDelay * 1_000_000_000))
+            }
             return ProcessResult(
                 executable: executable,
                 arguments: arguments,
                 stdout: "",
                 stderr: "mount command unavailable",
                 exitCode: 1,
-                timedOut: false,
+                timedOut: mountDelay > timeout,
                 duration: Date().timeIntervalSince(start)
             )
         }

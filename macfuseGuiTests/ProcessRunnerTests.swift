@@ -254,10 +254,13 @@ final class MountManagerParallelOperationTests: XCTestCase {
         let manager = makeManager(runner: runner)
         let remote = makeRemote(name: "DF Spaces", mountPoint: mountPoint)
 
+        let startedAt = Date()
         let status = await manager.refreshStatus(remote: remote)
+        let elapsed = Date().timeIntervalSince(startedAt)
 
         XCTAssertEqual(status.state, .connected, "df fallback should parse mount points with spaces.")
         XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 1.0, "Targeted df inspection should avoid waiting on a slow global mount probe.")
     }
 
     /// Beginner note: This method proves that a cancelled stale connect does not wedge future reconnect attempts.

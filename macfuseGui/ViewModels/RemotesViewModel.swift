@@ -1110,6 +1110,7 @@ final class RemotesViewModel: ObservableObject {
                 remoteID: remoteID,
                 operationID: operationID,
                 intent: intent,
+                trigger: trigger,
                 timeout: timeout
             )
 
@@ -1462,9 +1463,10 @@ final class RemotesViewModel: ObservableObject {
                 status = RemoteStatus(
                     state: .error,
                     mountedPath: nil,
-                    lastError: L10n.format(
-                        "Disconnect timed out after %llds. Close any files using the mount, then retry.",
-                        Int64(disconnectWatchdogTimeout)
+                    lastError: Self.watchdogTimeoutMessage(
+                        intent: .disconnect,
+                        currentState: .disconnecting,
+                        disconnectWatchdogTimeout: disconnectWatchdogTimeout
                     ),
                     updatedAt: Date()
                 )
@@ -2404,6 +2406,7 @@ final class RemotesViewModel: ObservableObject {
         remoteID: UUID,
         operationID: UUID,
         intent: RemoteOperationIntent,
+        trigger: RemoteOperationTrigger,
         timeout: TimeInterval
     ) {
         guard timeout > 0 else {
@@ -2436,7 +2439,7 @@ final class RemotesViewModel: ObservableObject {
             )
 
             if let timeoutMessage, !timeoutMessage.isEmpty {
-                if intent == .connect || intent == .disconnect || intent == .refresh {
+                if intent == .connect || intent == .refresh {
                     let timeoutStatus = RemoteStatus(
                         state: .error,
                         mountedPath: nil,
@@ -2464,14 +2467,26 @@ final class RemotesViewModel: ObservableObject {
             )
 
             if intent == .connect || intent == .disconnect {
-                self.scheduleTimeoutCleanup(remoteID: remoteID, timedOutOperationID: operationID)
+                self.scheduleTimeoutCleanup(
+                    remoteID: remoteID,
+                    timedOutOperationID: operationID,
+                    timedOutIntent: intent,
+                    trigger: trigger,
+                    timeoutMessage: timeoutMessage
+                )
             }
         }
     }
 
     /// Beginner note: Post-timeout cleanup runs only if no newer operation is active.
     /// It clears stale sshfs processes that commonly remain after timed-out operations.
-    private func scheduleTimeoutCleanup(remoteID: UUID, timedOutOperationID: UUID) {
+    private func scheduleTimeoutCleanup(
+        remoteID: UUID,
+        timedOutOperationID: UUID,
+        timedOutIntent: RemoteOperationIntent,
+        trigger: RemoteOperationTrigger,
+        timeoutMessage: String?
+    ) {
         guard let remote = remotes.first(where: { $0.id == remoteID }) else {
             return
         }
@@ -2483,6 +2498,38 @@ final class RemotesViewModel: ObservableObject {
 
             if let active = self.remoteOperations[remoteID],
                active.operationID != timedOutOperationID {
+                return
+            }
+
+            let initialRefreshQueuedAt = Date()
+            self.logMountCall(op: "refreshStatus", remoteID: remoteID, operationID: nil, queuedAt: initialRefreshQueuedAt)
+            let initialRefresh = await self.mountManager.refreshStatus(
+                remote: remote,
+                queuedAt: initialRefreshQueuedAt,
+                operationID: nil
+            )
+
+            guard self.remoteOperations[remoteID] == nil else {
+                return
+            }
+
+            if Self.shouldShortCircuitTimeoutCleanup(
+                with: initialRefresh,
+                timedOutIntent: timedOutIntent
+            ) {
+                let status = Self.statusAfterTimeoutCleanup(
+                    initialRefresh,
+                    timedOutIntent: timedOutIntent,
+                    timeoutMessage: timeoutMessage
+                )
+                self.setStatus(status, for: remoteID)
+                if timedOutIntent == .disconnect,
+                   status.state == .error,
+                   let message = status.lastError,
+                   !message.isEmpty,
+                   trigger != .termination {
+                    self.alertMessage = message
+                }
                 return
             }
 
@@ -2510,7 +2557,19 @@ final class RemotesViewModel: ObservableObject {
                 return
             }
 
-            self.setStatus(Self.statusAfterTimeoutCleanup(refreshed), for: remoteID)
+            let status = Self.statusAfterTimeoutCleanup(
+                refreshed,
+                timedOutIntent: timedOutIntent,
+                timeoutMessage: timeoutMessage
+            )
+            self.setStatus(status, for: remoteID)
+            if timedOutIntent == .disconnect,
+               status.state == .error,
+               let message = status.lastError,
+               !message.isEmpty,
+               trigger != .termination {
+                self.alertMessage = message
+            }
         }
     }
 
@@ -2684,22 +2743,70 @@ final class RemotesViewModel: ObservableObject {
         currentState != .disconnected
     }
 
-    nonisolated static func statusAfterTimeoutCleanup(_ refreshed: RemoteStatus) -> RemoteStatus {
-        if refreshed.state == .disconnected {
+    nonisolated static func shouldShortCircuitTimeoutCleanup(
+        with refreshed: RemoteStatus,
+        timedOutIntent: RemoteOperationIntent
+    ) -> Bool {
+        switch timedOutIntent {
+        case .connect:
+            return refreshed.state == .connected
+        case .disconnect:
+            return refreshed.state == .disconnected
+        case .refresh, .testConnection:
+            return false
+        }
+    }
+
+    nonisolated static func statusAfterTimeoutCleanup(
+        _ refreshed: RemoteStatus,
+        timedOutIntent: RemoteOperationIntent,
+        timeoutMessage: String? = nil
+    ) -> RemoteStatus {
+        switch timedOutIntent {
+        case .disconnect:
+            if refreshed.state == .disconnected {
+                return RemoteStatus(
+                    state: .disconnected,
+                    mountedPath: nil,
+                    lastError: nil,
+                    updatedAt: Date()
+                )
+            }
+
+            if refreshed.state == .error,
+               let message = refreshed.lastError,
+               !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return RemoteStatus(
+                    state: refreshed.state,
+                    mountedPath: refreshed.mountedPath,
+                    lastError: message,
+                    updatedAt: refreshed.updatedAt
+                )
+            }
+
             return RemoteStatus(
-                state: .disconnected,
-                mountedPath: nil,
-                lastError: L10n.tr("Connection reset after timeout."),
+                state: .error,
+                mountedPath: refreshed.mountedPath,
+                lastError: timeoutMessage ?? L10n.tr("Disconnect timed out. Close Finder windows, Quick Look previews, or files using this mount and retry."),
                 updatedAt: Date()
             )
-        }
+        case .connect, .refresh, .testConnection:
+            if refreshed.state == .disconnected {
+                return RemoteStatus(
+                    state: .disconnected,
+                    mountedPath: nil,
+                    lastError: L10n.tr("Connection reset after timeout."),
+                    updatedAt: Date()
+                )
+            }
 
-        return RemoteStatus(
-            state: refreshed.state,
-            mountedPath: refreshed.mountedPath,
-            lastError: refreshed.lastError,
-            updatedAt: refreshed.updatedAt
-        )
+            return RemoteStatus(
+                state: refreshed.state,
+                mountedPath: refreshed.mountedPath,
+                lastError: refreshed.lastError,
+                updatedAt: refreshed.updatedAt
+            )
+        }
     }
 
     nonisolated static func watchdogTimeoutMessage(
@@ -2716,7 +2823,10 @@ final class RemotesViewModel: ObservableObject {
             guard currentState == .disconnecting else {
                 return nil
             }
-            return L10n.format("Disconnect timed out after %llds. Close files using the mount, then retry.", Int64(disconnectWatchdogTimeout))
+            return L10n.format(
+                "Disconnect timed out after %llds. Close Finder windows, Quick Look previews, or files using the mount, then retry.",
+                Int64(disconnectWatchdogTimeout)
+            )
         case .refresh:
             return L10n.tr("Status refresh timed out. The mount may be stale (common after server restart). Disconnect and reconnect this remote.")
         case .testConnection:
