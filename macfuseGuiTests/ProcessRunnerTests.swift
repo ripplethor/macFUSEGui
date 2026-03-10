@@ -328,6 +328,50 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 2.0, "DF fallback should avoid long connect detection waits.")
     }
 
+    /// Beginner note: `df -P <mountPoint>` can briefly resolve to the parent filesystem even
+    /// after sshfs has mounted successfully. Connect detection should fall back to `/sbin/mount`
+    /// in that narrow window instead of declaring the mount missing.
+    func testConnectFallsBackToMountInspectionWhenDFStillShowsParentFilesystem() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/connect-mount-fallback"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            dfVisibilityDelayByMountPoint: [mountPoint: 10]
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Connect Mount Fallback", mountPoint: mountPoint)
+
+        let startedAt = Date()
+        let status = await manager.connect(remote: remote, password: nil)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 2.0, "Mount-table fallback should recover connect quickly when df still shows the parent filesystem.")
+    }
+
+    /// Beginner note: `diskutil unmount force` can report success slightly before the mount
+    /// fully disappears from subsequent probes. Connect should wait briefly for cleanup to settle
+    /// instead of failing immediately with "Mount is still active".
+    func testConnectWaitsForCleanupDrivenUnmountToDisappearBeforeRetrying() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/connect-unmount-settle"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            unmountVisibilityDelayByMountPoint: [mountPoint: 0.6]
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Connect Unmount Settle", mountPoint: mountPoint)
+
+        let startedAt = Date()
+        let status = await manager.connect(remote: remote, password: nil)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertGreaterThan(elapsed, 0.5, "Connect should wait for forced unmount cleanup to settle before retrying.")
+        XCTAssertLessThan(elapsed, 3.5, "Cleanup settle wait should remain bounded.")
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// It verifies we do not preserve "connected" forever when mount table checks keep missing.
     func testResponsivePathDoesNotPreserveConnectedForeverWithoutMountRecord() async throws {
@@ -581,12 +625,16 @@ private struct ReadyDependencyChecker: DependencyChecking {
 
 private actor FakeMountRunner: ProcessRunning {
     private var mountedPoints: Set<String> = []
+    private var mountActivatedAtByMountPoint: [String: Date] = [:]
+    private var unmountPendingUntilByMountPoint: [String: Date] = [:]
     private let alwaysResponsivePaths: Set<String>
     private let unreadableMountedPaths: Set<String>
     private let timedOutDirectoryQueryPaths: Set<String>
     private let connectDelayByMountPoint: [String: TimeInterval]
     private var connectDelayScheduleByMountPoint: [String: [TimeInterval]]
     private let mountInspectionDelay: TimeInterval
+    private let dfVisibilityDelayByMountPoint: [String: TimeInterval]
+    private let unmountVisibilityDelayByMountPoint: [String: TimeInterval]
     private let forceUnparseableMountOutput: Bool
 
     init(
@@ -596,6 +644,8 @@ private actor FakeMountRunner: ProcessRunning {
         alwaysResponsivePaths: Set<String> = [],
         unreadableMountedPaths: Set<String> = [],
         timedOutDirectoryQueryPaths: Set<String> = [],
+        dfVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
+        unmountVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
         forceUnparseableMountOutput: Bool = false
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
@@ -604,15 +654,21 @@ private actor FakeMountRunner: ProcessRunning {
         self.alwaysResponsivePaths = alwaysResponsivePaths
         self.unreadableMountedPaths = unreadableMountedPaths
         self.timedOutDirectoryQueryPaths = timedOutDirectoryQueryPaths
+        self.dfVisibilityDelayByMountPoint = dfVisibilityDelayByMountPoint
+        self.unmountVisibilityDelayByMountPoint = unmountVisibilityDelayByMountPoint
         self.forceUnparseableMountOutput = forceUnparseableMountOutput
     }
 
     func simulateExternalUnmount(mountPoint: String) {
         mountedPoints.remove(mountPoint)
+        mountActivatedAtByMountPoint.removeValue(forKey: mountPoint)
+        unmountPendingUntilByMountPoint.removeValue(forKey: mountPoint)
     }
 
     func simulateExternalMount(mountPoint: String) {
         mountedPoints.insert(mountPoint)
+        mountActivatedAtByMountPoint[mountPoint] = Date()
+        unmountPendingUntilByMountPoint.removeValue(forKey: mountPoint)
     }
 
     func run(
@@ -655,6 +711,8 @@ private actor FakeMountRunner: ProcessRunning {
             }
 
             mountedPoints.insert(mountPoint)
+            mountActivatedAtByMountPoint[mountPoint] = Date()
+            unmountPendingUntilByMountPoint.removeValue(forKey: mountPoint)
 
             return ProcessResult(
                 executable: executable,
@@ -668,6 +726,7 @@ private actor FakeMountRunner: ProcessRunning {
         }
 
         if executable == "/sbin/mount" {
+            materializePendingUnmounts()
             if mountInspectionDelay > 0 {
                 let boundedDelay = min(mountInspectionDelay, timeout + 0.05)
                 try? await Task.sleep(nanoseconds: UInt64(boundedDelay * 1_000_000_000))
@@ -698,12 +757,18 @@ private actor FakeMountRunner: ProcessRunning {
         }
 
         if executable == "/bin/df", let mountPoint = arguments.last {
+            materializePendingUnmounts()
             let isMounted = mountedPoints.contains(mountPoint)
             let stdout: String
-            if isMounted {
+            if isMounted, isDFVisible(for: mountPoint) {
                 stdout = """
                 Filesystem 512-blocks Used Available Capacity Mounted on
                 mock@host:/remote 1024 128 896 13% \(escapeDFPath(mountPoint))
+                """
+            } else if isMounted, dfVisibilityDelayByMountPoint[mountPoint] != nil {
+                stdout = """
+                Filesystem 512-blocks Used Available Capacity Mounted on
+                /dev/disk3s1 1024 128 896 13% /
                 """
             } else {
                 stdout = ""
@@ -713,13 +778,14 @@ private actor FakeMountRunner: ProcessRunning {
                 arguments: arguments,
                 stdout: stdout,
                 stderr: "",
-                exitCode: isMounted ? 0 : 1,
+                exitCode: (!stdout.isEmpty || isMounted) ? 0 : 1,
                 timedOut: false,
                 duration: Date().timeIntervalSince(startedAt)
             )
         }
 
         if executable == "/usr/bin/stat", let path = arguments.last {
+            materializePendingUnmounts()
             let isMounted = mountedPoints.contains(path) || alwaysResponsivePaths.contains(path)
             return ProcessResult(
                 executable: executable,
@@ -733,6 +799,7 @@ private actor FakeMountRunner: ProcessRunning {
         }
 
         if executable == "/usr/bin/find", let path = arguments.first {
+            materializePendingUnmounts()
             let isMounted = mountedPoints.contains(path)
             let shouldTimeout = timedOutDirectoryQueryPaths.contains(path)
             let isUnreadable = unreadableMountedPaths.contains(path)
@@ -750,7 +817,12 @@ private actor FakeMountRunner: ProcessRunning {
 
         if executable == "/usr/sbin/diskutil" || executable == "/sbin/umount" {
             if let mountPoint = arguments.last {
-                mountedPoints.remove(mountPoint)
+                if let settleDelay = unmountVisibilityDelayByMountPoint[mountPoint], settleDelay > 0 {
+                    unmountPendingUntilByMountPoint[mountPoint] = Date().addingTimeInterval(settleDelay)
+                } else {
+                    mountedPoints.remove(mountPoint)
+                    mountActivatedAtByMountPoint.removeValue(forKey: mountPoint)
+                }
             }
             return ProcessResult(
                 executable: executable,
@@ -776,5 +848,23 @@ private actor FakeMountRunner: ProcessRunning {
 
     private func escapeDFPath(_ path: String) -> String {
         path.replacingOccurrences(of: " ", with: "\\040")
+    }
+
+    private func isDFVisible(for mountPoint: String) -> Bool {
+        let requiredDelay = dfVisibilityDelayByMountPoint[mountPoint] ?? 0
+        guard requiredDelay > 0 else {
+            return true
+        }
+        let activatedAt = mountActivatedAtByMountPoint[mountPoint] ?? .distantPast
+        return Date().timeIntervalSince(activatedAt) >= requiredDelay
+    }
+
+    private func materializePendingUnmounts() {
+        let now = Date()
+        for (mountPoint, deadline) in unmountPendingUntilByMountPoint where now >= deadline {
+            mountedPoints.remove(mountPoint)
+            mountActivatedAtByMountPoint.removeValue(forKey: mountPoint)
+            unmountPendingUntilByMountPoint.removeValue(forKey: mountPoint)
+        }
     }
 }

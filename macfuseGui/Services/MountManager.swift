@@ -564,12 +564,12 @@ actor MountManager {
                 )
                 preConnectCleanupPerformed = true
 
-                let stillMounted = try await currentMountRecord(
-                    for: remote.localMountPoint,
-                    remoteID: remote.id,
-                    operationID: operationID
-                ) != nil
-                if stillMounted {
+                let cleanupClearedMount = await waitForUnmountAfterProcessStop(
+                    remote: remote,
+                    operationID: operationID,
+                    timeoutSeconds: 2.5
+                )
+                if !cleanupClearedMount {
                     throw AppError.processFailure(
                         L10n.format(
                             "Mount is still active at %@. Wait a few seconds and retry Connect.",
@@ -1108,7 +1108,8 @@ actor MountManager {
                     if let record = try await currentMountRecord(
                         for: normalizedMountPoint,
                         remoteID: remote.id,
-                        operationID: operationID
+                        operationID: operationID,
+                        allowMountFallbackOnDFNotMounted: true
                     ) {
                         let status = RemoteStatus(
                             state: .connected,
@@ -1285,7 +1286,8 @@ actor MountManager {
     private func currentMountRecord(
         for mountPoint: String,
         remoteID: UUID? = nil,
-        operationID: UUID? = nil
+        operationID: UUID? = nil,
+        allowMountFallbackOnDFNotMounted: Bool = false
     ) async throws -> MountRecord? {
         let normalizedMountPoint = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
         let remoteText = remoteID?.uuidString ?? "-"
@@ -1298,8 +1300,14 @@ actor MountManager {
         ) {
         case .mounted(let record):
             return record
-        case .notMounted:
+        case .notMounted where !allowMountFallbackOnDFNotMounted:
             return nil
+        case .notMounted:
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "df reported parent filesystem for \(normalizedMountPoint) during fallback-eligible lookup; checking mount table for remoteID=\(remoteText) operationID=\(operationText)."
+            )
         case .inconclusive:
             break
         }
