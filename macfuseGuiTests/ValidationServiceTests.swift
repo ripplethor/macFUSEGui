@@ -78,6 +78,62 @@ final class ValidationServiceTests: XCTestCase {
         XCTAssertTrue(errors.isEmpty)
     }
 
+    /// Beginner note: Local mount-point normalization must stay lexical-only so stale
+    /// FUSE mounts do not block MainActor validation and recovery conflict checks.
+    func testLocalPathNormalizerCollapsesAbsolutePathsLexically() {
+        XCTAssertEqual(
+            LocalPathNormalizer.normalize("/Users/philip/MACFUSE-REMOTES//server/./share/../mount/"),
+            "/Users/philip/MACFUSE-REMOTES/server/mount"
+        )
+        XCTAssertEqual(
+            LocalPathNormalizer.normalize("/tmp/../"),
+            "/"
+        )
+        XCTAssertEqual(
+            LocalPathNormalizer.parentPath(of: "/Users/philip/MACFUSE-REMOTES/server/mount"),
+            "/Users/philip/MACFUSE-REMOTES/server"
+        )
+    }
+
+    /// Beginner note: Validation still rejects paths that lexically collapse to root.
+    func testValidationRejectsLocalMountPointThatNormalizesToRootLexically() {
+        let draft = RemoteDraft(
+            displayName: "Rootish Mount",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "/home/dev",
+            localMountPoint: "/tmp/../"
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.contains("Local mount point cannot be '/'. Choose a subfolder."))
+    }
+
+    func testValidationDoesNotProbePrivateKeyFilesystemOnMainActor() {
+        let draft = RemoteDraft(
+            displayName: "Private Key Remote",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .privateKey,
+            privateKeyPath: "/Volumes/stale-mount/.ssh/id_ed25519",
+            password: "",
+            remoteDirectory: "/home/dev",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertFalse(errors.contains("Private key file does not exist."))
+        XCTAssertFalse(errors.contains("Private key file is not readable."))
+        XCTAssertTrue(errors.isEmpty)
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     func testValidationRejectsHostWithControlCharacter() {
         let draft = RemoteDraft(
@@ -333,5 +389,153 @@ final class ValidationServiceTests: XCTestCase {
             ),
             "Status refresh timed out. The mount may be stale (common after server restart). Disconnect and reconnect this remote."
         )
+    }
+
+    func testDependencyCheckerPinsResolvedSSHFSBackendAcrossCandidateOrderChanges() throws {
+        let fixture = try makeDependencyCheckerFixture()
+        defer {
+            fixture.cleanup()
+        }
+
+        let initial = DependencyChecker(
+            userDefaults: fixture.userDefaults,
+            fallbackSSHFSPaths: [fixture.firstSSHFS, fixture.secondSSHFS],
+            macfuseInstallPath: fixture.macfusePath,
+            sshExecutablePath: fixture.sshPath,
+            sftpExecutablePath: fixture.sftpPath,
+            environmentProvider: { [:] }
+        )
+        let initialStatus = initial.check()
+        XCTAssertTrue(initialStatus.isReady)
+        XCTAssertEqual(initialStatus.sshfsPath, fixture.firstSSHFS)
+
+        let reordered = DependencyChecker(
+            userDefaults: fixture.userDefaults,
+            fallbackSSHFSPaths: [fixture.secondSSHFS, fixture.firstSSHFS],
+            macfuseInstallPath: fixture.macfusePath,
+            sshExecutablePath: fixture.sshPath,
+            sftpExecutablePath: fixture.sftpPath,
+            environmentProvider: { [:] }
+        )
+        let reorderedStatus = reordered.check()
+        XCTAssertTrue(reorderedStatus.isReady)
+        XCTAssertEqual(reorderedStatus.sshfsPath, fixture.firstSSHFS)
+    }
+
+    func testDependencyCheckerInvalidOverrideBlocksFallbackAndSurfacesActionableIssue() throws {
+        let fixture = try makeDependencyCheckerFixture()
+        defer {
+            fixture.cleanup()
+        }
+
+        let checker = DependencyChecker(
+            userDefaults: fixture.userDefaults,
+            fallbackSSHFSPaths: [fixture.firstSSHFS],
+            macfuseInstallPath: fixture.macfusePath,
+            sshExecutablePath: fixture.sshPath,
+            sftpExecutablePath: fixture.sftpPath,
+            environmentProvider: { [:] }
+        )
+        checker.setConfiguredSSHFSOverridePath(fixture.root.appendingPathComponent("missing/sshfs").path)
+
+        let status = checker.check()
+        XCTAssertFalse(status.isReady)
+        XCTAssertNil(status.sshfsBackend)
+        XCTAssertEqual(status.issues.first?.kind, .sshfs)
+        XCTAssertTrue(status.userFacingMessage.contains("Clear the override"))
+    }
+
+    func testDependencyCheckerClearPinnedBackendAllowsManagedRediscovery() throws {
+        let fixture = try makeDependencyCheckerFixture()
+        defer {
+            fixture.cleanup()
+        }
+
+        let checker = DependencyChecker(
+            userDefaults: fixture.userDefaults,
+            fallbackSSHFSPaths: [fixture.firstSSHFS, fixture.secondSSHFS],
+            macfuseInstallPath: fixture.macfusePath,
+            sshExecutablePath: fixture.sshPath,
+            sftpExecutablePath: fixture.sftpPath,
+            environmentProvider: { [:] }
+        )
+        XCTAssertEqual(checker.check().sshfsPath, fixture.firstSSHFS)
+
+        let reordered = DependencyChecker(
+            userDefaults: fixture.userDefaults,
+            fallbackSSHFSPaths: [fixture.secondSSHFS, fixture.firstSSHFS],
+            macfuseInstallPath: fixture.macfusePath,
+            sshExecutablePath: fixture.sshPath,
+            sftpExecutablePath: fixture.sftpPath,
+            environmentProvider: { [:] }
+        )
+        XCTAssertEqual(reordered.check().sshfsPath, fixture.firstSSHFS)
+
+        reordered.clearPinnedSSHFSBackend()
+        let rediscoveredStatus = reordered.check()
+        XCTAssertTrue(rediscoveredStatus.isReady)
+        XCTAssertEqual(rediscoveredStatus.sshfsPath, fixture.secondSSHFS)
+    }
+
+    private func makeDependencyCheckerFixture() throws -> DependencyCheckerFixture {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("macfusegui-tests-dependency-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let firstSSHFS = root.appendingPathComponent("opt/homebrew/bin/sshfs").path
+        let secondSSHFS = root.appendingPathComponent("usr/local/bin/sshfs").path
+        let sshPath = root.appendingPathComponent("usr/bin/ssh").path
+        let sftpPath = root.appendingPathComponent("usr/bin/sftp").path
+        let macfusePath = root.appendingPathComponent("Library/Filesystems/macfuse.fs").path
+
+        try makeExecutable(atPath: firstSSHFS)
+        try makeExecutable(atPath: secondSSHFS)
+        try makeExecutable(atPath: sshPath)
+        try makeExecutable(atPath: sftpPath)
+        try FileManager.default.createDirectory(atPath: macfusePath, withIntermediateDirectories: true)
+
+        let suiteName = "macfuseGuiTests.DependencyChecker.\(UUID().uuidString)"
+        guard let userDefaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Could not create isolated UserDefaults suite for dependency checker tests.")
+            throw NSError(domain: "ValidationServiceTests", code: 1)
+        }
+        userDefaults.removePersistentDomain(forName: suiteName)
+
+        return DependencyCheckerFixture(
+            root: root,
+            firstSSHFS: firstSSHFS,
+            secondSSHFS: secondSSHFS,
+            sshPath: sshPath,
+            sftpPath: sftpPath,
+            macfusePath: macfusePath,
+            userDefaults: userDefaults,
+            suiteName: suiteName
+        )
+    }
+
+    private func makeExecutable(atPath path: String) throws {
+        let url = URL(fileURLWithPath: path)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "#!/bin/sh\nexit 0\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+    }
+
+    private struct DependencyCheckerFixture {
+        let root: URL
+        let firstSSHFS: String
+        let secondSSHFS: String
+        let sshPath: String
+        let sftpPath: String
+        let macfusePath: String
+        let userDefaults: UserDefaults
+        let suiteName: String
+
+        func cleanup() {
+            userDefaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: root)
+        }
     }
 }

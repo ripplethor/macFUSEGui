@@ -62,7 +62,7 @@ final class MountStateParser {
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalize(_ path: String) -> String {
         // Keep this lexical-only (no symlink resolution) so status probes avoid filesystem I/O.
-        URL(fileURLWithPath: path).standardizedFileURL.path
+        LocalPathNormalizer.normalize(path)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

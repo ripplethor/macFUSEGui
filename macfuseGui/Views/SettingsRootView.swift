@@ -13,41 +13,42 @@ import SwiftUI
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 struct SettingsRootView: View {
-    static let minimumWindowSize = NSSize(width: 980, height: 720)
 
     @ObservedObject var viewModel: RemotesViewModel
     let onOpenEditorPlugins: () -> Void
 
     @State private var activeEditorSession: EditorSession?
     @State private var pendingRemoteDeletion: PendingRemoteDeletion?
+    @State private var sshfsOverrideDraft: String = ""
+    @State private var requirementsExpanded: Bool?
 
     var body: some View {
-        VStack(spacing: 16) {
-            if let message = viewModel.alertMessage, !message.isEmpty {
-                settingsAlertBanner(message: message)
-            }
+        ScrollView {
+            VStack(spacing: 16) {
+                if let message = viewModel.alertMessage, !message.isEmpty {
+                    settingsAlertBanner(message: message)
+                }
 
-            settingsHeader
+                settingsHeader
 
-            GeometryReader { geometry in
-                let paneHeight = max(0, geometry.size.height)
+                if let dependency = viewModel.dependencyStatus {
+                    dependencyRequirementsPanel(status: dependency)
+                }
 
                 HStack(alignment: .top, spacing: 16) {
                     remotesPane
-                        .frame(minWidth: 410, idealWidth: 426, maxWidth: 440, alignment: .topLeading)
-                        .frame(height: paneHeight, alignment: .topLeading)
+                        .frame(minWidth: 410, idealWidth: 426, maxWidth: 440, maxHeight: 720, alignment: .topLeading)
 
                     detailPanel
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .frame(height: paneHeight, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .padding(18)
         }
-        .padding(18)
         .frame(
-            minWidth: Self.minimumWindowSize.width,
-            minHeight: Self.minimumWindowSize.height
+            minWidth: 600, idealWidth: 980, maxWidth: .infinity,
+            minHeight: 400, maxHeight: .infinity
         )
         .background(Color(NSColor.windowBackgroundColor))
         .sheet(item: $activeEditorSession) { session in
@@ -82,6 +83,10 @@ struct SettingsRootView: View {
         }
         .onAppear {
             viewModel.refreshLaunchAtLoginState()
+            sshfsOverrideDraft = viewModel.configuredSSHFSBackendOverridePath
+        }
+        .onChange(of: viewModel.configuredSSHFSBackendOverridePath) { newValue in
+            sshfsOverrideDraft = newValue
         }
     }
 
@@ -190,6 +195,190 @@ struct SettingsRootView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.orange.opacity(0.30), lineWidth: 1)
+        )
+    }
+
+    private var isRequirementsExpanded: Bool {
+        if let requirementsExpanded {
+            return requirementsExpanded
+        }
+        // Collapsed by default when all green; expanded when there are issues.
+        if let status = viewModel.dependencyStatus {
+            return !status.isReady
+        }
+        return true
+    }
+
+    private func dependencyRequirementsPanel(status: DependencyStatus) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(status.isReady ? Color.green : Color.red)
+                    .frame(width: 7, height: 7)
+
+                Text(L10n.tr("Requirements"))
+                    .font(.headline)
+
+                settingsMetricChip(
+                    text: status.isReady ? L10n.tr("Ready") : L10n.tr("Action Required"),
+                    systemImage: status.isReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                    tint: status.isReady ? .green : .red
+                )
+
+                if let backend = status.sshfsBackend {
+                    settingsMetricChip(
+                        text: backend.isUsingOverride ? L10n.tr("Custom sshfs") : L10n.tr("Pinned sshfs"),
+                        systemImage: backend.isUsingOverride ? "slider.horizontal.3" : "pin.fill",
+                        tint: backend.isUsingOverride ? .orange : .blue
+                    )
+                }
+
+                Spacer(minLength: 12)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        requirementsExpanded = !isRequirementsExpanded
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isRequirementsExpanded ? 90 : 0))
+                }
+                .buttonStyle(.plain)
+                .help(isRequirementsExpanded ? "Collapse requirements" : "Expand requirements")
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    requirementsExpanded = !isRequirementsExpanded
+                }
+            }
+
+            if isRequirementsExpanded {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Spacer(minLength: 0)
+
+                        Button("Refresh Requirements") {
+                            viewModel.refreshDependencies()
+                            sshfsOverrideDraft = viewModel.configuredSSHFSBackendOverridePath
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Text("macfuseGui now pins a validated sshfs backend so launch-time PATH differences do not silently change the binary it runs.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let backend = status.sshfsBackend {
+                        detailField(title: "Active sshfs Backend", value: backend.path, monospaced: true)
+                        detailField(title: "Backend Source", value: backend.source.displayName)
+                    } else {
+                        statusCallout(
+                            title: "sshfs Backend",
+                            message: L10n.tr("No valid sshfs backend is pinned yet. Install sshfs-mac or provide a custom local path below."),
+                            tint: .red
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Custom sshfs Path")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        TextField("Optional absolute path to sshfs", text: $sshfsOverrideDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.callout, design: .monospaced))
+                            .textSelection(.enabled)
+
+                        HStack(spacing: 10) {
+                            Button("Save Override") {
+                                viewModel.saveSSHFSBackendOverride(sshfsOverrideDraft)
+                                sshfsOverrideDraft = viewModel.configuredSSHFSBackendOverridePath
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                            .disabled(trimmedOverrideDraft == viewModel.configuredSSHFSBackendOverridePath)
+
+                            Button("Clear Override") {
+                                viewModel.clearSSHFSBackendOverride()
+                                sshfsOverrideDraft = ""
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(viewModel.configuredSSHFSBackendOverridePath.isEmpty)
+
+                            Button("Re-detect Managed Backend") {
+                                viewModel.repinSSHFSBackend()
+                                sshfsOverrideDraft = viewModel.configuredSSHFSBackendOverridePath
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!viewModel.configuredSSHFSBackendOverridePath.isEmpty)
+                        }
+
+                        Text("Leave this blank unless sshfs is installed somewhere non-standard. When blank, the app manages and reuses a pinned backend automatically.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if !status.issues.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(status.issues, id: \.self) { issue in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(issue.summary)
+                                        .font(.callout.weight(.semibold))
+                                    if !issue.detail.isEmpty {
+                                        Text(issue.detail)
+                                            .font(.callout)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    HStack(spacing: 10) {
+                                        if let installCommand = issue.installCommand, !installCommand.isEmpty {
+                                            Button("Copy Install Command") {
+                                                viewModel.copyDependencyInstallCommand(for: issue)
+                                            }
+                                            .buttonStyle(.bordered)
+
+                                            Text(installCommand)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                                .textSelection(.enabled)
+                                        }
+
+                                        if issue.kind.helpURL != nil {
+                                            Button("Open Install Guide") {
+                                                viewModel.openDependencyHelp(for: issue)
+                                            }
+                                            .buttonStyle(.bordered)
+                                        }
+                                    }
+                                }
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Color.red.opacity(0.06))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(Color.red.opacity(0.16), lineWidth: 1)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
 
@@ -664,6 +853,10 @@ struct SettingsRootView: View {
         activeEditorSession = EditorSession(draft: draft)
     }
 
+    private var trimmedOverrideDraft: String {
+        sshfsOverrideDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var launchAtLoginBinding: Binding<Bool> {
         Binding(
             get: {
@@ -769,7 +962,10 @@ struct EditorPluginSettingsView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 900, minHeight: 540)
+        .frame(
+            minWidth: 600, idealWidth: 900, maxWidth: .infinity,
+            minHeight: 400, idealHeight: 540, maxHeight: .infinity
+        )
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             ensurePluginSelection()

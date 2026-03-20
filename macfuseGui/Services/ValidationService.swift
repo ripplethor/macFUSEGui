@@ -11,12 +11,8 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class ValidationService {
-    private let fileManager: FileManager
-
     /// Beginner note: Initializers create valid state before any other method is used.
-    init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-    }
+    init() {}
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func validateDraft(
@@ -72,7 +68,10 @@ final class ValidationService {
         } else if containsUnsafeControlCharacters(localMount) {
             errors.append(L10n.tr("Local mount point contains invalid control characters."))
         } else {
-            let normalizedMount = URL(fileURLWithPath: localMount).standardizedFileURL.path
+            // Keep mount-point normalization purely lexical here. Resolving a stale
+            // FUSE path via `standardizedFileURL` can synchronously touch the
+            // filesystem and wedge UI-driven validation/recovery flows.
+            let normalizedMount = LocalPathNormalizer.normalize(localMount)
             if normalizedMount == "/" {
                 errors.append(L10n.tr("Local mount point cannot be '/'. Choose a subfolder."))
             }
@@ -92,16 +91,10 @@ final class ValidationService {
             } else if containsUnsafeControlCharacters(keyPath) {
                 errors.append(L10n.tr("Private key path contains invalid control characters."))
             } else {
-                // This is a shallow readability/existence check at validation time only.
-                // Runtime key accessibility (for example removable/network-backed symlink targets)
-                // is still validated by connect/auth flows.
-                var isDir: ObjCBool = false
-                if !fileManager.fileExists(atPath: keyPath, isDirectory: &isDir) || isDir.boolValue {
-                    errors.append(L10n.tr("Private key file does not exist."))
-                }
-                if !fileManager.isReadableFile(atPath: keyPath) {
-                    errors.append(L10n.tr("Private key file is not readable."))
-                }
+                // Keep key-path validation lexical-only on MainActor. A user can point
+                // the key at a stale network/FUSE path, and synchronous `fileExists` /
+                // `isReadableFile` checks here would beachball save/test flows.
+                // MountManager performs bounded readiness probes during connect/test.
             }
         case .password:
             if !hasStoredPassword && draft.password.isEmpty {
@@ -147,5 +140,67 @@ final class ValidationService {
         return chars[0].isLetter
             && chars[1] == ":"
             && (chars[2] == "/" || chars[2] == "\\")
+    }
+}
+
+/// Main-actor callers must not resolve mount-point symlinks or filesystem state while
+/// comparing paths. A dead/stale FUSE mount can block those lookups long enough to
+/// beachball the app. This helper keeps normalization purely lexical.
+enum LocalPathNormalizer {
+    static func normalize(_ rawPath: String) -> String {
+        let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ""
+        }
+
+        let isAbsolute = trimmed.hasPrefix("/")
+        let segments = trimmed.split(separator: "/", omittingEmptySubsequences: true)
+        var normalizedSegments: [Substring] = []
+
+        for segment in segments {
+            switch segment {
+            case ".":
+                continue
+            case "..":
+                if isAbsolute {
+                    if !normalizedSegments.isEmpty {
+                        normalizedSegments.removeLast()
+                    }
+                } else if let last = normalizedSegments.last, last != ".." {
+                    normalizedSegments.removeLast()
+                } else {
+                    normalizedSegments.append(segment)
+                }
+            default:
+                normalizedSegments.append(segment)
+            }
+        }
+
+        let normalizedBody = normalizedSegments.map(String.init).joined(separator: "/")
+        if isAbsolute {
+            return normalizedBody.isEmpty ? "/" : "/\(normalizedBody)"
+        }
+        return normalizedBody
+    }
+
+    static func parentPath(of rawPath: String) -> String {
+        let normalized = normalize(rawPath)
+        guard !normalized.isEmpty else {
+            return ""
+        }
+
+        guard normalized != "/" else {
+            return "/"
+        }
+
+        guard let slashIndex = normalized.lastIndex(of: "/") else {
+            return ""
+        }
+
+        if slashIndex == normalized.startIndex {
+            return "/"
+        }
+
+        return String(normalized[..<slashIndex])
     }
 }

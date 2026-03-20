@@ -34,6 +34,7 @@ final class RemoteStoreTests: XCTestCase {
             localMountPoint: tempDir.path,
             isFavorite: true,
             autoConnectOnLaunch: true,
+            disableLocalCaches: false,
             favoriteRemoteDirectories: ["/srv", "/srv/projects"],
             recentRemoteDirectories: ["/srv/projects", "/srv"]
         )
@@ -46,6 +47,7 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded.first?.host, "example.com")
         XCTAssertEqual(loaded.first?.isFavorite, true)
         XCTAssertEqual(loaded.first?.autoConnectOnLaunch, true)
+        XCTAssertEqual(loaded.first?.disableLocalCaches, false)
         XCTAssertEqual(loaded.first?.favoriteRemoteDirectories, ["/srv", "/srv/projects"])
         XCTAssertEqual(loaded.first?.recentRemoteDirectories, ["/srv/projects", "/srv"])
 
@@ -88,6 +90,7 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded[0].displayName, "Legacy Remote")
         XCTAssertFalse(loaded[0].isFavorite)
         XCTAssertFalse(loaded[0].autoConnectOnLaunch)
+        XCTAssertTrue(loaded[0].disableLocalCaches)
         XCTAssertEqual(loaded[0].favoriteRemoteDirectories, [])
         XCTAssertEqual(loaded[0].recentRemoteDirectories, [])
     }

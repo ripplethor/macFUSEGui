@@ -350,7 +350,7 @@ final class RemotesViewModel: ObservableObject {
             startRecoveryMonitoringIfNeeded()
 
             // These checks are safe to run often and drive visible status chips in settings.
-            dependencyStatus = dependencyChecker.check()
+            publishDependencyStatus(dependencyChecker.check(), announceIfMissing: true)
             launchAtLoginState = launchAtLoginService.currentState()
             diagnostics.append(level: .info, category: "store", message: "Loaded \(remotes.count) remotes from \(remoteStore.storageURL.path)")
         } catch {
@@ -410,7 +410,53 @@ final class RemotesViewModel: ObservableObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func refreshDependencies() {
-        dependencyStatus = dependencyChecker.check()
+        publishDependencyStatus(dependencyChecker.check(), announceIfMissing: true)
+    }
+
+    var configuredSSHFSBackendOverridePath: String {
+        dependencyChecker.configuredSSHFSOverridePath ?? ""
+    }
+
+    func saveSSHFSBackendOverride(_ rawPath: String) {
+        dependencyChecker.setConfiguredSSHFSOverridePath(rawPath)
+        publishDependencyStatus(dependencyChecker.check(), announceIfMissing: true)
+        diagnostics.append(
+            level: .info,
+            category: "startup",
+            message: "Updated sshfs backend override to \(dependencyChecker.configuredSSHFSOverridePath ?? "<none>")"
+        )
+    }
+
+    func clearSSHFSBackendOverride() {
+        dependencyChecker.setConfiguredSSHFSOverridePath(nil)
+        publishDependencyStatus(dependencyChecker.check(), announceIfMissing: false)
+        alertMessage = L10n.tr("Cleared the custom sshfs backend override.")
+        diagnostics.append(level: .info, category: "startup", message: "Cleared sshfs backend override")
+    }
+
+    func repinSSHFSBackend() {
+        dependencyChecker.clearPinnedSSHFSBackend()
+        publishDependencyStatus(dependencyChecker.check(), announceIfMissing: true)
+        diagnostics.append(level: .info, category: "startup", message: "Re-resolved managed sshfs backend")
+    }
+
+    func copyDependencyInstallCommand(for issue: DependencyIssue) {
+        guard let installCommand = issue.installCommand, !installCommand.isEmpty else {
+            return
+        }
+        copyTextToPasteboard(
+            installCommand,
+            successMessage: L10n.format("Copied install command for %@.", issue.kind.rawValue)
+        )
+    }
+
+    func openDependencyHelp(for issue: DependencyIssue) {
+        guard let url = issue.kind.helpURL else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+        alertMessage = L10n.format("Opened installation help for %@.", issue.kind.rawValue)
+        diagnostics.append(level: .info, category: "startup", message: "Opened dependency help for \(issue.kind.rawValue): \(url.absoluteString)")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -691,14 +737,9 @@ final class RemotesViewModel: ObservableObject {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalizedMountPath(_ rawPath: String) -> String {
-        let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        let normalized = LocalPathNormalizer.normalize(rawPath)
+        guard !normalized.isEmpty else {
             return ""
-        }
-
-        var normalized = URL(fileURLWithPath: trimmed).standardizedFileURL.path
-        if normalized.count > 1 && normalized.hasSuffix("/") {
-            normalized.removeLast()
         }
         return normalized.lowercased()
     }
@@ -1821,7 +1862,7 @@ final class RemotesViewModel: ObservableObject {
             return
         }
 
-        let unmountedPath = URL(fileURLWithPath: volumeURL.path).standardizedFileURL.path.lowercased()
+        let unmountedPath = LocalPathNormalizer.normalize(volumeURL.path).lowercased()
         guard let remote = remotes.first(where: { normalizedMountPath($0.localMountPoint) == unmountedPath }) else {
             return
         }
@@ -2083,7 +2124,7 @@ final class RemotesViewModel: ObservableObject {
         }
 
         let dependency = dependencyChecker.check()
-        dependencyStatus = dependency
+        publishDependencyStatus(dependency, announceIfMissing: false)
         guard dependency.isReady else {
             diagnostics.append(level: .warning, category: "recovery", message: "Skipping reconnect (\(trigger)): dependencies are not ready.")
             return
@@ -2361,7 +2402,15 @@ final class RemotesViewModel: ObservableObject {
             || lower.contains("is itself on a macfuse volume")
             || lower.contains("dependencies are not ready")
             || lower.contains("sshfs is not installed")
+            || lower.contains("sshfs backend")
             || lower.contains("macfuse is not installed")
+    }
+
+    private func publishDependencyStatus(_ status: DependencyStatus, announceIfMissing: Bool) {
+        dependencyStatus = status
+        if announceIfMissing && !status.isReady {
+            alertMessage = status.userFacingMessage
+        }
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -3243,12 +3292,16 @@ final class RemotesViewModel: ObservableObject {
                 operations: operations,
                 mountProbes: mountProbes
             )
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(snapshot, forType: .string)
-            alertMessage = L10n.tr("Diagnostics copied to clipboard.")
+            copyTextToPasteboard(snapshot, successMessage: L10n.tr("Diagnostics copied to clipboard."))
             diagnostics.append(level: .info, category: "diagnostics", message: "Copied diagnostics snapshot")
         }
+    }
+
+    private func copyTextToPasteboard(_ text: String, successMessage: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        alertMessage = successMessage
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

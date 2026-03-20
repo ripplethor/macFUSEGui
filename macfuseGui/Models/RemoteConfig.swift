@@ -22,6 +22,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
     var localMountPoint: String
     var isFavorite: Bool
     var autoConnectOnLaunch: Bool
+    var disableLocalCaches: Bool
     // Persisted per-remote path memory; normalization and limits are enforced by RemotesViewModel.
     var favoriteRemoteDirectories: [String]
     var recentRemoteDirectories: [String]
@@ -54,6 +55,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         case localMountPoint
         case isFavorite
         case autoConnectOnLaunch
+        case disableLocalCaches
         case favoriteRemoteDirectories
         case recentRemoteDirectories
     }
@@ -71,6 +73,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         localMountPoint: String,
         isFavorite: Bool = false,
         autoConnectOnLaunch: Bool = false,
+        disableLocalCaches: Bool = true,
         favoriteRemoteDirectories: [String] = [],
         recentRemoteDirectories: [String] = []
     ) {
@@ -85,6 +88,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         self.localMountPoint = localMountPoint
         self.isFavorite = isFavorite
         self.autoConnectOnLaunch = autoConnectOnLaunch
+        self.disableLocalCaches = disableLocalCaches
         self.favoriteRemoteDirectories = Self.cappedPathMemory(
             favoriteRemoteDirectories,
             limit: Self.favoriteDirectoryLimit
@@ -111,6 +115,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         localMountPoint = try container.decodeIfPresent(String.self, forKey: .localMountPoint) ?? ""
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         autoConnectOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .autoConnectOnLaunch) ?? false
+        disableLocalCaches = try container.decodeIfPresent(Bool.self, forKey: .disableLocalCaches) ?? true
         let decodedFavorites = try container.decodeIfPresent([String].self, forKey: .favoriteRemoteDirectories) ?? []
         let decodedRecents = try container.decodeIfPresent([String].self, forKey: .recentRemoteDirectories) ?? []
         favoriteRemoteDirectories = Self.cappedPathMemory(decodedFavorites, limit: Self.favoriteDirectoryLimit)
@@ -132,6 +137,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         try container.encode(localMountPoint, forKey: .localMountPoint)
         try container.encode(isFavorite, forKey: .isFavorite)
         try container.encode(autoConnectOnLaunch, forKey: .autoConnectOnLaunch)
+        try container.encode(disableLocalCaches, forKey: .disableLocalCaches)
         try container.encode(favoriteRemoteDirectories, forKey: .favoriteRemoteDirectories)
         try container.encode(recentRemoteDirectories, forKey: .recentRemoteDirectories)
     }
@@ -148,6 +154,7 @@ struct RemoteConfig: Identifiable, Codable, Equatable, Hashable, Sendable {
         localMountPoint: "/Volumes/example",
         isFavorite: false,
         autoConnectOnLaunch: false,
+        disableLocalCaches: true,
         favoriteRemoteDirectories: [],
         recentRemoteDirectories: []
     )
@@ -169,6 +176,7 @@ struct RemoteDraft: Equatable, Sendable {
     var localMountPoint: String = ""
     var isFavorite: Bool = false
     var autoConnectOnLaunch: Bool = false
+    var disableLocalCaches: Bool = true
     var favoriteRemoteDirectories: [String] = []
     var recentRemoteDirectories: [String] = []
 
@@ -224,6 +232,7 @@ struct RemoteDraft: Equatable, Sendable {
             localMountPoint: trimmedLocalMountPoint,
             isFavorite: isFavorite,
             autoConnectOnLaunch: autoConnectOnLaunch,
+            disableLocalCaches: disableLocalCaches,
             favoriteRemoteDirectories: cappedFavorites,
             recentRemoteDirectories: cappedRecents
         )
@@ -245,6 +254,7 @@ extension RemoteDraft {
         self.localMountPoint = remote.localMountPoint
         self.isFavorite = remote.isFavorite
         self.autoConnectOnLaunch = remote.autoConnectOnLaunch
+        self.disableLocalCaches = remote.disableLocalCaches
         self.favoriteRemoteDirectories = remote.favoriteRemoteDirectories
         self.recentRemoteDirectories = remote.recentRemoteDirectories
     }

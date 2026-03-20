@@ -37,6 +37,53 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("volname=Server - srv"))
     }
 
+    func testDefaultBuildIncludesNoLocalCachesAndAutoCache() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+
+        XCTAssertTrue(command.arguments.contains("nolocalcaches"))
+        XCTAssertTrue(command.arguments.contains("auto_cache"))
+        XCTAssertFalse(command.arguments.contains("attr_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("entry_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("cache_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("cache_max_size=50000"))
+    }
+
+    func testBuildOmitsNoLocalCachesWhenDisabledButKeepsAutoCache() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server",
+            disableLocalCaches: false
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+
+        XCTAssertFalse(command.arguments.contains("nolocalcaches"))
+        XCTAssertTrue(command.arguments.contains("auto_cache"))
+        XCTAssertTrue(command.arguments.contains("attr_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("entry_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("cache_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("cache_max_size=50000"))
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     func testRedactsPasswordEnvironmentValues() {
         let builder = MountCommandBuilder(redactionService: RedactionService())
@@ -143,6 +190,23 @@ final class MountArgBuilderTests: XCTestCase {
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
         XCTAssertTrue(command.arguments.contains("alice@[2001:db8::1]:/home/alice"))
+    }
+
+    func testIdentityFilePathIsNormalizedLexicallyWithoutFilesystemResolution() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .privateKey,
+            privateKeyPath: "/Users/dev/.ssh/../.ssh//id_ed25519",
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        XCTAssertTrue(command.arguments.contains("IdentityFile=/Users/dev/.ssh/id_ed25519"))
     }
 
     func testPlainHostnameIsNotBracketed() {

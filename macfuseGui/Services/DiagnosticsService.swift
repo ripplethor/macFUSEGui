@@ -104,10 +104,16 @@ final class DiagnosticsService {
         if let dependency {
             lines.append("Dependencies ready: \(dependency.isReady)")
             lines.append(redactedLine("sshfs path: \(dependency.sshfsPath ?? "not found")", secrets: contextualSecrets))
+            if let backend = dependency.sshfsBackend {
+                lines.append("sshfs backend source: \(backend.source.displayName)")
+                if let overridePath = backend.configuredOverridePath, !overridePath.isEmpty {
+                    lines.append(redactedLine("sshfs override path: \(overridePath)", secrets: contextualSecrets))
+                }
+            }
             if !dependency.issues.isEmpty {
                 lines.append("Dependency issues:")
                 dependency.issues.forEach { issue in
-                    lines.append(redactedLine("- \(issue)", secrets: contextualSecrets))
+                    lines.append(redactedLine("- \(issue.userFacingMessage)", secrets: contextualSecrets))
                 }
             }
         }

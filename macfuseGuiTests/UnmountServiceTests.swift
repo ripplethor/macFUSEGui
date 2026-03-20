@@ -84,6 +84,27 @@ final class UnmountServiceTests: XCTestCase {
         XCTAssertLessThan(elapsed, 1.0, "Unmount should stay on the targeted df path when it can confirm state.")
     }
 
+    func testBusyBlockerProbeUsesNonRecursiveLsofOptions() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/busy-lsof-probe"
+        let runner = BusyUnmountRunner(mountPoint: mountPoint)
+        let service = UnmountService(
+            runner: runner,
+            diagnostics: DiagnosticsService(),
+            mountStateParser: MountStateParser()
+        )
+
+        do {
+            try await service.unmount(mountPoint: mountPoint)
+            XCTFail("Expected busy unmount to fail.")
+        } catch {
+            let lsofInvocations = await runner.lsofInvocations()
+            XCTAssertFalse(lsofInvocations.isEmpty)
+            XCTAssertTrue(lsofInvocations.allSatisfy { $0.contains("-b") })
+            XCTAssertTrue(lsofInvocations.allSatisfy { $0.contains("+d") })
+            XCTAssertTrue(lsofInvocations.allSatisfy { !$0.contains("+D") })
+        }
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func makeService() -> UnmountService {
         UnmountService(
@@ -185,5 +206,91 @@ private actor FakeDFFallbackUnmountRunner: ProcessRunning {
 
     private func escapeDFPath(_ path: String) -> String {
         path.replacingOccurrences(of: " ", with: "\\040")
+    }
+}
+
+private actor BusyUnmountRunner: ProcessRunning {
+    private let mountPoint: String
+    private var recordedLsofArguments: [[String]] = []
+
+    init(mountPoint: String) {
+        self.mountPoint = mountPoint
+    }
+
+    func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        timeout: TimeInterval,
+        standardInput: String?
+    ) async throws -> ProcessResult {
+        let start = Date()
+
+        if executable == "/bin/df" {
+            let stdout = """
+            Filesystem 512-blocks Used Available Capacity Mounted on
+            mock@host:/remote 1024 128 896 13% \(mountPoint)
+            """
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: stdout,
+                stderr: "",
+                exitCode: 0,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        if executable == "/usr/sbin/diskutil" || executable == "/sbin/umount" {
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: "",
+                stderr: "resource busy",
+                exitCode: 1,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        if executable == "/usr/sbin/lsof" {
+            recordedLsofArguments.append(arguments)
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: "",
+                stderr: "",
+                exitCode: 0,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        if executable == "/bin/ps" || executable == "/bin/kill" {
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: "",
+                stderr: "",
+                exitCode: 0,
+                timedOut: false,
+                duration: Date().timeIntervalSince(start)
+            )
+        }
+
+        return ProcessResult(
+            executable: executable,
+            arguments: arguments,
+            stdout: "",
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+            duration: Date().timeIntervalSince(start)
+        )
+    }
+
+    func lsofInvocations() -> [[String]] {
+        recordedLsofArguments
     }
 }

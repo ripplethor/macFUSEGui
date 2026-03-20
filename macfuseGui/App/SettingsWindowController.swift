@@ -9,46 +9,46 @@
 import AppKit
 import SwiftUI
 
-private let baseSettingsDefaultWindowSize = NSSize(width: 980, height: 620)
-private let baseSettingsMinimumWindowSize = NSSize(width: 600, height: 400)
-
 @MainActor
 /// Beginner note: Shared window setup keeps sizing, activation, and persistence behavior consistent.
+/// Window sizing is driven by the SwiftUI view's .frame(minWidth:idealWidth:maxWidth:minHeight:idealHeight:maxHeight:)
+/// via NSHostingSizingOptions. The window controller does not hardcode pixel dimensions.
 class BaseSettingsWindowController: NSWindowController {
     private let hasSavedFrame: Bool
     private var didApplyInitialCentering = false
 
     /// Beginner note: Initializers create valid state before any other method is used.
-    convenience init(
+    init(
         rootView: AnyView,
         title: String,
         frameAutosaveName: String
     ) {
-        self.init(
-            rootView: rootView,
-            title: title,
-            frameAutosaveName: frameAutosaveName,
-            defaultWindowSize: baseSettingsDefaultWindowSize,
-            minimumWindowSize: baseSettingsMinimumWindowSize
-        )
-    }
-
-    /// Beginner note: Initializers create valid state before any other method is used.
-    init(
-        rootView: AnyView,
-        title: String,
-        frameAutosaveName: String,
-        defaultWindowSize: NSSize,
-        minimumWindowSize: NSSize
-    ) {
         hasSavedFrame = UserDefaults.standard.object(forKey: "NSWindow Frame \(frameAutosaveName)") != nil
         let hosting = NSHostingController(rootView: rootView)
+
+        // sizingOptions drives contentMinSize/contentMaxSize from the SwiftUI view's
+        // .frame(minWidth:idealWidth:maxWidth:minHeight:idealHeight:maxHeight:).
+        hosting.sizingOptions = [.preferredContentSize, .minSize, .maxSize]
+
         let window = NSWindow(contentViewController: hosting)
         window.title = title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(defaultWindowSize)
-        window.minSize = minimumWindowSize
         window.isReleasedWhenClosed = false
+
+        // Force a layout pass so the hosting controller measures the SwiftUI view
+        // and populates preferredContentSize before the window is shown.
+        // Then cap to the screen's visible area so the window never goes off-screen.
+        hosting.view.layoutSubtreeIfNeeded()
+        let preferred = hosting.preferredContentSize
+        if preferred.width > 0 && preferred.height > 0 {
+            let visibleFrame = NSScreen.main?.visibleFrame.size ?? preferred
+            let capped = NSSize(
+                width: min(preferred.width, visibleFrame.width),
+                height: min(preferred.height, visibleFrame.height)
+            )
+            window.setContentSize(capped)
+        }
+
         window.setFrameAutosaveName(frameAutosaveName)
 
         super.init(window: window)
@@ -91,9 +91,7 @@ final class SettingsWindowController: BaseSettingsWindowController {
         super.init(
             rootView: AnyView(root),
             title: "\(appName) Settings",
-            frameAutosaveName: "SettingsWindow",
-            defaultWindowSize: SettingsRootView.minimumWindowSize,
-            minimumWindowSize: SettingsRootView.minimumWindowSize
+            frameAutosaveName: "SettingsWindow"
         )
     }
 
@@ -114,9 +112,7 @@ final class EditorPluginSettingsWindowController: BaseSettingsWindowController {
         super.init(
             rootView: AnyView(root),
             title: "Editor Plugins",
-            frameAutosaveName: "EditorPluginSettingsWindow",
-            defaultWindowSize: baseSettingsDefaultWindowSize,
-            minimumWindowSize: baseSettingsMinimumWindowSize
+            frameAutosaveName: "EditorPluginSettingsWindow"
         )
     }
 

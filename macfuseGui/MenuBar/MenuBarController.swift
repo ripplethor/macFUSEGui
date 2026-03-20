@@ -503,7 +503,42 @@ final class MenuBarController: NSObject {
                 return
             }
 
-            NSWorkspace.shared.activateFileViewerSelecting([folderURL])
+            let currentStatus = self.viewModel.status(for: remote.id)
+            guard currentStatus.state == .connected else {
+                self.viewModel.appendDiagnostic(
+                    level: .warning,
+                    category: "editor",
+                    message: "Skipping Finder fallback for \(remote.displayName) because the remote is no longer connected after editor launch attempts."
+                )
+                self.viewModel.alertMessage = L10n.format(
+                    "%@ Remote is no longer connected, so Finder fallback was skipped.",
+                    result.message ?? L10n.tr("Could not open an editor.")
+                )
+                return
+            }
+
+            let fallbackPath: String
+            if let mountedPath = currentStatus.mountedPath, !mountedPath.isEmpty {
+                fallbackPath = mountedPath
+            } else {
+                fallbackPath = folderURL.path
+            }
+            let fallbackURL = URL(fileURLWithPath: fallbackPath, isDirectory: true)
+
+            guard await self.editorOpenService.isFolderResponsiveForFinderFallback(fallbackURL) else {
+                self.viewModel.appendDiagnostic(
+                    level: .warning,
+                    category: "editor",
+                    message: "Skipping Finder fallback for \(remote.displayName) because \(fallbackPath) did not pass the bounded folder responsiveness probe."
+                )
+                self.viewModel.alertMessage = L10n.format(
+                    "%@ Mount folder is no longer responding. Disconnect and reconnect the remote, then retry.",
+                    result.message ?? L10n.tr("Could not open an editor.")
+                )
+                return
+            }
+
+            NSWorkspace.shared.activateFileViewerSelecting([fallbackURL])
             self.viewModel.alertMessage = L10n.format(
                 "%@ Opened mount folder in Finder instead.",
                 result.message ?? L10n.tr("Could not open an editor.")
@@ -746,10 +781,27 @@ private struct MenuPopoverContentView: View {
                     .foregroundStyle(.red)
 
                 ForEach(dependency.issues, id: \.self) { issue in
-                    Text(issue)
-                        .font(.caption)
-                        .foregroundStyle(.primary.opacity(0.82))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(issue.summary)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        if !issue.detail.isEmpty {
+                            Text(issue.detail)
+                                .font(.caption)
+                                .foregroundStyle(.primary.opacity(0.82))
+                        }
+                        if let installCommand = issue.installCommand, !installCommand.isEmpty {
+                            Text(installCommand)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
                 }
+
+                Button("Open Settings", action: onOpenSettings)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
             }
             .padding(12)
             .background(menuNoticeFill(tint: .red))

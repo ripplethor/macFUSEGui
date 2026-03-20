@@ -484,7 +484,7 @@ final class UnmountService {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalizePath(_ path: String) -> String {
-        URL(fileURLWithPath: path).standardizedFileURL.path
+        LocalPathNormalizer.normalize(path)
     }
 
     private func currentMountRecordViaDF(for mountPoint: String, deadline: Date? = nil) async throws -> DFMountLookupResult {
@@ -531,7 +531,7 @@ final class UnmountService {
         let source = fields[0]
         let mountedField = fields.dropFirst(5).joined(separator: " ")
         let decodedMountedField = mountStateParser.decodeEscapedMountField(mountedField)
-        let mountedOn = URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
+        let mountedOn = LocalPathNormalizer.normalize(decodedMountedField)
         return (source, mountedOn)
     }
 
@@ -566,9 +566,12 @@ final class UnmountService {
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     private func detectBlockingProcesses(mountPoint: String) async throws -> [UnmountBlockingProcess] {
+        // Avoid recursive `lsof +D` on reconnecting/stale mounts. `+d` keeps the
+        // probe to the top directory and `-b` tells lsof to avoid blocking kernel
+        // calls, which materially reduces the chance of wedging disconnect flows.
         let result = try await runner.run(
             executable: "/usr/sbin/lsof",
-            arguments: ["-n", "-w", "-Fpcn", "+D", mountPoint],
+            arguments: ["-b", "-n", "-w", "-Fpcn", "+d", mountPoint],
             timeout: lsofTimeout
         )
 

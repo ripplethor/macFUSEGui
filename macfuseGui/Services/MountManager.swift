@@ -163,7 +163,7 @@ actor MountManager {
 
         do {
             // Normalize path once so comparisons do not fail due to equivalent path formats.
-            let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
+            let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
             let previousStatus = cachedStatus(for: remote.id)
             var mountedRecord = try await currentMountRecord(
                 for: remote.localMountPoint,
@@ -595,8 +595,11 @@ actor MountManager {
             }
 
             try throwIfCancelled()
+            try await ensurePrivateKeyReady(for: remote)
+
+            try throwIfCancelled()
             do {
-                try ensureLocalMountPointReady(remote.localMountPoint)
+                try await ensureLocalMountPointReady(remote.localMountPoint)
             } catch {
                 let shouldRetryAfterCleanup = !preConnectCleanupPerformed
                     && shouldRetryConnectAfterMountPointPreparationFailure(error)
@@ -615,7 +618,7 @@ actor MountManager {
                     preConnectCleanupPerformed = true
 
                     try throwIfCancelled()
-                    try ensureLocalMountPointReady(remote.localMountPoint)
+                    try await ensureLocalMountPointReady(remote.localMountPoint)
                 } else {
                     throw error
                 }
@@ -677,7 +680,8 @@ actor MountManager {
             ])
         }
 
-        try ensureLocalMountPointReady(remote.localMountPoint)
+        try await ensurePrivateKeyReady(for: remote)
+        try await ensureLocalMountPointReady(remote.localMountPoint)
 
         var mountedDuringTest = false
         do {
@@ -796,7 +800,7 @@ actor MountManager {
         skipForceUnmount: Bool = false
     ) async {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
-        let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
+        let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
         let connectionNeedle = "\(remote.username)@\(sshHostArgument(remote.host)):\(remote.remoteDirectory)"
         let postStopAction = skipForceUnmount ? "skipping force-unmount by request." : "attempting force-unmount anyway."
 
@@ -1001,7 +1005,7 @@ actor MountManager {
                     // Cleanup is best-effort. If it fails, the next attempt will still run and will likely
                     // return a clearer mount error. We do not fail the retry solely due to cleanup.
                     try? await unmountService.unmount(mountPoint: remote.localMountPoint)
-                    try? ensureLocalMountPointReady(remote.localMountPoint)
+                    try? await ensureLocalMountPointReady(remote.localMountPoint)
                     continue
                 }
 
@@ -1034,24 +1038,19 @@ actor MountManager {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
-    private func ensureLocalMountPointReady(_ mountPoint: String) throws {
-        let normalized = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
-        var isDir: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: normalized, isDirectory: &isDir)
+    private func ensureLocalMountPointReady(_ mountPoint: String) async throws {
+        let normalized = LocalPathNormalizer.normalize(mountPoint)
+        guard !normalized.isEmpty else {
+            throw AppError.validationFailed([L10n.tr("Local mount point is required.")])
+        }
 
-        if exists {
-            guard isDir.boolValue else {
-                throw AppError.validationFailed([L10n.format("Local mount point is not a directory: %@", normalized)])
-            }
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: normalized, isDirectory: &isDir), isDir.boolValue {
             return
         }
 
         do {
-            try FileManager.default.createDirectory(
-                at: URL(fileURLWithPath: normalized, isDirectory: true),
-                withIntermediateDirectories: true
-            )
-            diagnostics.append(level: .info, category: "mount", message: "Created missing local mount point: \(normalized)")
+            try FileManager.default.createDirectory(atPath: normalized, withIntermediateDirectories: true)
         } catch {
             throw AppError.validationFailed([
                 L10n.format(
@@ -1059,6 +1058,63 @@ actor MountManager {
                     normalized,
                     error.localizedDescription
                 )
+            ])
+        }
+
+        var isDirAfter: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: normalized, isDirectory: &isDirAfter), isDirAfter.boolValue else {
+            throw AppError.validationFailed([L10n.format("Local mount point is not a directory: %@", normalized)])
+        }
+
+        diagnostics.append(level: .info, category: "mount", message: "Created missing local mount point: \(normalized)")
+    }
+
+    private func ensurePrivateKeyReady(for remote: RemoteConfig) async throws {
+        guard remote.authMode == .privateKey else {
+            return
+        }
+
+        guard let rawKeyPath = remote.privateKeyPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawKeyPath.isEmpty else {
+            throw AppError.validationFailed([L10n.tr("Private key path is required for key authentication.")])
+        }
+
+        let keyPath = LocalPathNormalizer.normalize(rawKeyPath)
+        let probeTimeout: TimeInterval = 1.5
+
+        do {
+            let existsResult = try await runner.run(
+                executable: "/usr/bin/test",
+                arguments: ["-f", keyPath],
+                timeout: probeTimeout
+            )
+            if existsResult.timedOut {
+                throw AppError.validationFailed([
+                    L10n.tr("Private key path is not responding. Move the key to a local folder and retry.")
+                ])
+            }
+            guard existsResult.exitCode == 0 else {
+                throw AppError.validationFailed([L10n.tr("Private key file does not exist.")])
+            }
+
+            let readableResult = try await runner.run(
+                executable: "/usr/bin/test",
+                arguments: ["-r", keyPath],
+                timeout: probeTimeout
+            )
+            if readableResult.timedOut {
+                throw AppError.validationFailed([
+                    L10n.tr("Private key path is not responding. Move the key to a local folder and retry.")
+                ])
+            }
+            guard readableResult.exitCode == 0 else {
+                throw AppError.validationFailed([L10n.tr("Private key file is not readable.")])
+            }
+        } catch let error as AppError {
+            throw error
+        } catch {
+            throw AppError.validationFailed([
+                L10n.format("Could not validate the private key path: %@", error.localizedDescription)
             ])
         }
     }
@@ -1119,7 +1175,7 @@ actor MountManager {
 
             // After sshfs exits successfully, the mount should show up quickly.
             // Keeping this short prevents "phantom hangs" when the system is unstable.
-            let normalizedMountPoint = URL(fileURLWithPath: remote.localMountPoint).standardizedFileURL.path
+            let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
             let detectionDeadline = Date().addingTimeInterval(5)
             while Date() < detectionDeadline {
                 if Task.isCancelled {
@@ -1311,7 +1367,7 @@ actor MountManager {
         operationID: UUID? = nil,
         allowMountFallbackOnDFNotMounted: Bool = false
     ) async throws -> MountRecord? {
-        let normalizedMountPoint = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
+        let normalizedMountPoint = LocalPathNormalizer.normalize(mountPoint)
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
         try throwIfCancelled()
@@ -1414,7 +1470,7 @@ actor MountManager {
         remoteID: UUID? = nil,
         operationID: UUID? = nil
     ) async throws -> MountRecord? {
-        let normalizedMountPoint = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
+        let normalizedMountPoint = LocalPathNormalizer.normalize(mountPoint)
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
         let mountResult = try await runMountInspection(
@@ -1521,7 +1577,7 @@ actor MountManager {
         let source = fields[0]
         let mountedField = fields.dropFirst(5).joined(separator: " ")
         let decodedMountedField = mountStateParser.decodeEscapedMountField(mountedField)
-        let mountedOn = URL(fileURLWithPath: decodedMountedField).standardizedFileURL.path
+        let mountedOn = LocalPathNormalizer.normalize(decodedMountedField)
         return (source, mountedOn)
     }
 
@@ -1660,7 +1716,7 @@ actor MountManager {
     /// It avoids heavy probe loops and makes stale mount teardown deterministic.
     /// When `fast` is true, per-command timeouts are shorter to reduce recovery stall time.
     private func forceUnmountMountPoint(_ mountPoint: String, remoteName: String, fast: Bool = false) async {
-        let normalized = URL(fileURLWithPath: mountPoint).standardizedFileURL.path
+        let normalized = LocalPathNormalizer.normalize(mountPoint)
         let commands: [(label: String, executable: String, args: [String], timeout: TimeInterval)]
         if fast {
             commands = [

@@ -42,18 +42,29 @@ final class MountCommandBuilder {
             "ServerAliveInterval=15",
             "ServerAliveCountMax=3",
             "defer_permissions",
-            "noappledouble",
-            "nolocalcaches",
+            "noappledouble"
+        ]
+
+        if remote.disableLocalCaches {
+            options.append("nolocalcaches")
+        } else {
+            options.append("attr_timeout=120")
+            options.append("entry_timeout=120")
+            options.append("cache_timeout=120")
+            options.append("cache_max_size=50000")
+        }
+
+        options.append(contentsOf: [
             "auto_cache",
             "StrictHostKeyChecking=accept-new",
             "ConnectTimeout=10",
             "volname=\(escapedOptionValue(volumeName(for: remote, normalizedRemotePath: normalizedRemotePath)))"
-        ]
+        ])
 
         if remote.authMode == .privateKey,
            let key = remote.privateKeyPath,
            !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let normalizedKeyPath = URL(fileURLWithPath: key).standardizedFileURL.path
+            let normalizedKeyPath = LocalPathNormalizer.normalize(key)
             options.append("IdentityFile=\(escapedOptionValue(normalizedKeyPath))")
         }
 

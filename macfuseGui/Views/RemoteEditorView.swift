@@ -286,6 +286,17 @@ struct RemoteEditorView: View {
                 }
             }
             .toggleStyle(.switch)
+
+            Toggle(isOn: $viewModel.draft.disableLocalCaches) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Prioritize freshness over speed")
+                        .font(.callout.weight(.semibold))
+                    Text("Slower, but better for shared or live-changing mounts. Turn this off for faster dev or code mounts.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
         }
     }
 
@@ -800,18 +811,19 @@ struct RemoteEditorView: View {
     /// Beginner note: This method picks a local folder picker start location that
     /// avoids stale/unreachable paths while still being useful for mount selection.
     private func preferredLocalFolderPickerStartURL() -> URL {
-        let homeURL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).standardizedFileURL
+        let homePath = LocalPathNormalizer.normalize(NSHomeDirectory())
+        let homeURL = URL(fileURLWithPath: homePath, isDirectory: true)
         let rawMountPoint = viewModel.draft.localMountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !rawMountPoint.isEmpty, rawMountPoint.hasPrefix("/") else {
             return homeURL
         }
 
-        let parent = URL(fileURLWithPath: rawMountPoint, isDirectory: true)
-            .standardizedFileURL
-            .deletingLastPathComponent()
-        let parentPath = parent.path
-        let homePath = homeURL.path
+        let parentPath = LocalPathNormalizer.parentPath(of: rawMountPoint)
+        guard !parentPath.isEmpty else {
+            return homeURL
+        }
+        let parent = URL(fileURLWithPath: parentPath, isDirectory: true)
 
         // Stay within the user's home directory for predictable local performance.
         if parentPath == homePath || parentPath.hasPrefix(homePath + "/") {

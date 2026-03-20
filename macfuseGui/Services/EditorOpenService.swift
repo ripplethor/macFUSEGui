@@ -67,6 +67,7 @@ final class EditorOpenService {
     private let pluginRegistry: EditorPluginRegistry
     private let runner: ProcessRunning
     private let folderPathPlaceholder = "{folderPath}"
+    private let finderFallbackProbeTimeout: TimeInterval = 1.5
 
     /// Beginner note: Initializers create valid state before any other method is used.
     init(pluginRegistry: EditorPluginRegistry, runner: ProcessRunning) {
@@ -92,11 +93,7 @@ final class EditorOpenService {
             )
         }
 
-        // Use a decoded POSIX path for process arguments (not a percent-encoded URL path).
-        var folderPath = folderURL.path(percentEncoded: false)
-        if folderPath.count > 1 && folderPath.hasSuffix("/") {
-            folderPath.removeLast()
-        }
+        let folderPath = resolvedFolderPath(folderURL)
         return await Self.openWithPluginsSnapshot(
             plugins: plugins,
             runner: runner,
@@ -105,6 +102,35 @@ final class EditorOpenService {
             mode: mode,
             folderPathPlaceholder: folderPathPlaceholder
         )
+    }
+
+    /// Before handing a mount path to Finder after editor fallback failures, run a
+    /// bounded directory query so dead/stale FUSE paths do not wedge the UI flow.
+    func isFolderResponsiveForFinderFallback(_ folderURL: URL) async -> Bool {
+        let folderPath = resolvedFolderPath(folderURL)
+        guard !folderPath.isEmpty else {
+            return false
+        }
+
+        do {
+            let result = try await runner.run(
+                executable: "/usr/bin/find",
+                arguments: [folderPath, "-mindepth", "1", "-maxdepth", "1", "-print", "-quit"],
+                timeout: finderFallbackProbeTimeout
+            )
+            return !result.timedOut && result.exitCode == 0
+        } catch {
+            return false
+        }
+    }
+
+    private func resolvedFolderPath(_ folderURL: URL) -> String {
+        // Use a decoded POSIX path for process arguments (not a percent-encoded URL path).
+        var folderPath = folderURL.path(percentEncoded: false)
+        if folderPath.count > 1 && folderPath.hasSuffix("/") {
+            folderPath.removeLast()
+        }
+        return folderPath
     }
 
     private nonisolated static func openWithPluginsSnapshot(

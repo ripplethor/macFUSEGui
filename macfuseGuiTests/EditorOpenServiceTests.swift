@@ -182,6 +182,38 @@ final class EditorOpenServiceTests: XCTestCase {
         XCTAssertEqual(result.message, "Editor plugin 'Cursor' is not active.")
     }
 
+    func testFinderFallbackProbeUsesBoundedDirectoryQuery() async throws {
+        let context = try makeContext()
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(scriptedResults: [.success])
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+        let folderPath = "/tmp/editor-open-tests/project"
+
+        let ready = await service.isFolderResponsiveForFinderFallback(
+            URL(fileURLWithPath: folderPath, isDirectory: true)
+        )
+
+        XCTAssertTrue(ready)
+        let invocations = await runner.invocations()
+        let invocation = try XCTUnwrap(invocations.first)
+        XCTAssertEqual(invocation.executable, "/usr/bin/find")
+        XCTAssertEqual(invocation.arguments, [folderPath, "-mindepth", "1", "-maxdepth", "1", "-print", "-quit"])
+        XCTAssertEqual(invocation.timeout, 1.5, accuracy: 0.001)
+    }
+
+    func testFinderFallbackProbeTreatsFailedDirectoryQueryAsUnresponsive() async throws {
+        let context = try makeContext()
+        let registry = makeRegistry(context: context)
+        let runner = FakeEditorRunner(scriptedResults: [.failure])
+        let service = EditorOpenService(pluginRegistry: registry, runner: runner)
+
+        let ready = await service.isFolderResponsiveForFinderFallback(
+            URL(fileURLWithPath: "/tmp/editor-open-tests/project", isDirectory: true)
+        )
+
+        XCTAssertFalse(ready)
+    }
+
     private func makeRegistry(context: (appSupportDirectory: URL, defaults: UserDefaults)) -> EditorPluginRegistry {
         EditorPluginRegistry(
             fileManager: .default,

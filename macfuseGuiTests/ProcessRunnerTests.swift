@@ -308,6 +308,27 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 12.0, "Connect should remain bounded even when mount inspection initially times out.")
     }
 
+    func testConnectFailsWhenPrivateKeyFileProbeReportsMissingPath() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/private-key-missing"
+        let runner = FakeMountRunner(connectDelayByMountPoint: [:])
+        let manager = makeManager(runner: runner)
+        let remote = RemoteConfig(
+            displayName: "Remote Missing Key",
+            host: "10.0.0.2",
+            port: 22,
+            username: "Administrator",
+            authMode: .privateKey,
+            privateKeyPath: "/tmp/nonexistent-private-key-\(UUID())",
+            remoteDirectory: "/D:/wwwroot",
+            localMountPoint: mountPoint
+        )
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .error)
+        XCTAssertEqual(status.lastError, "Private key file does not exist.")
+    }
+
     /// Beginner note: If `/sbin/mount` output shape changes and parser misses the mount line,
     /// connect should still succeed quickly by using df fallback during post-connect detection.
     func testConnectUsesDFFallbackWhenMountOutputIsUnparseable() async throws {
@@ -633,7 +654,7 @@ final class MountManagerParallelOperationTests: XCTestCase {
             port: 22,
             username: "Administrator",
             authMode: .privateKey,
-            privateKeyPath: "/tmp/mock-id",
+            privateKeyPath: "/etc/hosts",
             remoteDirectory: "/D:/wwwroot",
             localMountPoint: mountPoint
         )
@@ -858,6 +879,27 @@ private actor FakeMountRunner: ProcessRunning {
                 stderr: shouldTimeout ? "timed out" : (success ? "" : (isMounted ? "Device not configured" : "No such file or directory")),
                 exitCode: shouldTimeout ? 15 : (success ? 0 : 1),
                 timedOut: shouldTimeout,
+                duration: Date().timeIntervalSince(startedAt)
+            )
+        }
+
+        if executable == "/usr/bin/test", let flag = arguments.first, let path = arguments.last, flag != path {
+            let exists: Bool
+            if flag == "-f" {
+                var isDir: ObjCBool = false
+                exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && !isDir.boolValue
+            } else if flag == "-r" {
+                exists = FileManager.default.isReadableFile(atPath: path)
+            } else {
+                exists = FileManager.default.fileExists(atPath: path)
+            }
+            return ProcessResult(
+                executable: executable,
+                arguments: arguments,
+                stdout: "",
+                stderr: exists ? "" : "test: \(path): No such file or directory",
+                exitCode: exists ? 0 : 1,
+                timedOut: false,
                 duration: Date().timeIntervalSince(startedAt)
             )
         }
