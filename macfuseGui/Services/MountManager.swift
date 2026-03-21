@@ -56,7 +56,7 @@ actor MountManager {
     // Directory queries can be slower than metadata probes on healthy network mounts.
     private let mountDirectoryQueryTimeout: TimeInterval = 3.5
     // Prevent indefinite "connected" false-positives when mount table parsing fails but local path still exists.
-    private let maxConnectedPreserveMisses = 2
+    private let maxConnectedPreserveMisses = 4
     // Treat one-off directory query timeouts as transient before forcing recovery.
     private let maxDirectoryQueryTimeoutPreserveMisses = 2
     // Directory-query exit failures can also be transient around wake/network restore.
@@ -67,6 +67,9 @@ actor MountManager {
     private let directoryQueryReconnectCooldownSeconds: TimeInterval
     private let sshfsConnectCommandTimeout: TimeInterval
     private let forceStopProcessListTimeout: TimeInterval = 3
+
+    // Cached sshfs capabilities, keyed by resolved sshfs path. Detected lazily on first connect.
+    private var cachedCapabilities: [String: SSHFSCapabilities] = [:]
 
     // Internal status cache so callers can ask current state without rerunning probes.
     private var statuses: [UUID: RemoteStatus] = [:]
@@ -1119,6 +1122,21 @@ actor MountManager {
         }
     }
 
+    /// Resolves SSHFS capabilities for a given binary, caching the result per path.
+    private func resolveCapabilities(sshfsPath: String) async -> SSHFSCapabilities {
+        if let cached = cachedCapabilities[sshfsPath] {
+            return cached
+        }
+        let detected = await SSHFSCapabilities.detect(runner: runner, sshfsPath: sshfsPath)
+        cachedCapabilities[sshfsPath] = detected
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "Detected sshfs capabilities for \(sshfsPath): dcache=\(detected.supportsDCacheFamily) olderCache=\(detected.supportsOlderCacheFamily)"
+        )
+        return detected
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     @discardableResult
     private func connectAttempt(
@@ -1129,11 +1147,13 @@ actor MountManager {
         operationID: UUID?
     ) async throws -> RemoteStatus {
         try throwIfCancelled()
+        let capabilities = await resolveCapabilities(sshfsPath: sshfsPath)
         func runConnectAttempt(passwordEnvironment: [String: String]) async throws -> RemoteStatus {
             let command = commandBuilder.build(
                 sshfsPath: sshfsPath,
                 remote: remote,
-                passwordEnvironment: passwordEnvironment
+                passwordEnvironment: passwordEnvironment,
+                capabilities: capabilities
             )
 
             diagnostics.append(level: .info, category: "mount", message: "Running \(command.redactedCommand)")

@@ -151,7 +151,7 @@ final class MountArgBuilderTests: XCTestCase {
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
         let optionFlagCount = command.arguments.filter { $0 == "-o" }.count
 
-        XCTAssertEqual(optionFlagCount, 11)
+        XCTAssertEqual(optionFlagCount, 12)
         XCTAssertTrue(command.arguments.contains("IdentityFile=/Users/dev/.ssh/id\\,ed25519"))
     }
 
@@ -246,6 +246,144 @@ final class MountArgBuilderTests: XCTestCase {
 
         XCTAssertNotNil(volumeOption)
         XCTAssertNotEqual(volumeOption, "volname=macfuseGui")
+    }
+
+    func testBaseOptionsIncludeNoAppleXattr() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        XCTAssertTrue(command.arguments.contains("noapplexattr"))
+        XCTAssertTrue(command.arguments.contains("noappledouble"))
+    }
+
+    func testFastModeWithDCacheCapabilities() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server",
+            disableLocalCaches: false
+        )
+        let caps = SSHFSCapabilities(supportsDCacheFamily: true, supportsOlderCacheFamily: false)
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote, capabilities: caps)
+
+        XCTAssertTrue(command.arguments.contains("dir_cache=yes"))
+        XCTAssertTrue(command.arguments.contains("dcache_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("dcache_stat_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("dcache_dir_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("dcache_link_timeout=120"))
+        // Existing generic cache options must still be present.
+        XCTAssertTrue(command.arguments.contains("attr_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("entry_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("cache_stat_timeout=120"))
+    }
+
+    func testFastModeWithOlderCacheCapabilities() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server",
+            disableLocalCaches: false
+        )
+        let caps = SSHFSCapabilities(supportsDCacheFamily: false, supportsOlderCacheFamily: true)
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote, capabilities: caps)
+
+        XCTAssertTrue(command.arguments.contains("cache_stat_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("cache_dir_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("cache_link_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("dir_cache=yes"))
+        // Existing generic cache options must still be present.
+        XCTAssertTrue(command.arguments.contains("attr_timeout=120"))
+    }
+
+    func testFastModeWithNoCapabilitiesSkipsExtendedCacheOptions() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server",
+            disableLocalCaches: false
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote, capabilities: .none)
+
+        XCTAssertFalse(command.arguments.contains("dir_cache=yes"))
+        XCTAssertFalse(command.arguments.contains("cache_stat_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("attr_timeout=120"))
+        XCTAssertTrue(command.arguments.contains("cache_timeout=120"))
+    }
+
+    func testSlowModeIgnoresCapabilities() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server",
+            disableLocalCaches: true
+        )
+        let caps = SSHFSCapabilities(supportsDCacheFamily: true, supportsOlderCacheFamily: true)
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote, capabilities: caps)
+
+        XCTAssertTrue(command.arguments.contains("nolocalcaches"))
+        XCTAssertFalse(command.arguments.contains("dir_cache=yes"))
+        XCTAssertFalse(command.arguments.contains("cache_stat_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("attr_timeout=120"))
+    }
+
+    func testDCacheFamilyPreferredOverOlderWhenBothSupported() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server",
+            disableLocalCaches: false
+        )
+        let caps = SSHFSCapabilities(supportsDCacheFamily: true, supportsOlderCacheFamily: true)
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote, capabilities: caps)
+
+        XCTAssertTrue(command.arguments.contains("dir_cache=yes"))
+        XCTAssertTrue(command.arguments.contains("dcache_timeout=120"))
+        XCTAssertFalse(command.arguments.contains("cache_stat_timeout=120"))
     }
 }
 

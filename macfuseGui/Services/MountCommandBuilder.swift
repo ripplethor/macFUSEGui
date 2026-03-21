@@ -17,9 +17,44 @@ struct MountCommand: Sendable {
     let redactedCommand: String
 }
 
+/// Beginner note: Captures which SSHFS-specific metadata cache options the installed binary supports.
+/// Detect once per sshfs path and reuse across mount calls.
+struct SSHFSCapabilities: Sendable, Equatable {
+    /// Newer sshfs builds: dir_cache, dcache_timeout, dcache_stat_timeout, dcache_dir_timeout, dcache_link_timeout.
+    let supportsDCacheFamily: Bool
+    /// Older sshfs builds: cache_stat_timeout, cache_dir_timeout, cache_link_timeout.
+    let supportsOlderCacheFamily: Bool
+
+    static let none = SSHFSCapabilities(supportsDCacheFamily: false, supportsOlderCacheFamily: false)
+
+    /// Runs `sshfs -h` and inspects the help output for supported option names.
+    static func detect(runner: ProcessRunning, sshfsPath: String) async -> SSHFSCapabilities {
+        do {
+            let result = try await runner.run(
+                executable: sshfsPath,
+                arguments: ["-h"],
+                timeout: 5
+            )
+            // sshfs prints help to stderr (some builds use stdout); check both.
+            let output = result.stderr + " " + result.stdout
+            let hasDCache = output.contains("dir_cache")
+            let hasOlderCache = output.contains("cache_stat_timeout")
+            return SSHFSCapabilities(
+                supportsDCacheFamily: hasDCache,
+                supportsOlderCacheFamily: hasOlderCache
+            )
+        } catch {
+            return .none
+        }
+    }
+}
+
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class MountCommandBuilder {
+    private static let cacheTimeoutSeconds = 120
+    private static let cacheMaxEntries = 50000
+
     private let redactionService: RedactionService
 
     /// Beginner note: Initializers create valid state before any other method is used.
@@ -31,27 +66,42 @@ final class MountCommandBuilder {
     func build(
         sshfsPath: String,
         remote: RemoteConfig,
-        passwordEnvironment: [String: String] = [:]
+        passwordEnvironment: [String: String] = [:],
+        capabilities: SSHFSCapabilities = .none
     ) -> MountCommand {
         let executable = sshfsPath.trimmingCharacters(in: .whitespacesAndNewlines)
         assert(!executable.isEmpty, "sshfsPath must not be empty.")
         let normalizedRemotePath = normalizedRemoteDirectory(remote.remoteDirectory)
+        let t = Self.cacheTimeoutSeconds
 
         var options = [
             "reconnect",
             "ServerAliveInterval=15",
             "ServerAliveCountMax=3",
             "defer_permissions",
-            "noappledouble"
+            "noappledouble",
+            "noapplexattr"
         ]
 
         if remote.disableLocalCaches {
             options.append("nolocalcaches")
         } else {
-            options.append("attr_timeout=120")
-            options.append("entry_timeout=120")
-            options.append("cache_timeout=120")
-            options.append("cache_max_size=50000")
+            options.append("attr_timeout=\(t)")
+            options.append("entry_timeout=\(t)")
+            options.append("cache_timeout=\(t)")
+            options.append("cache_max_size=\(Self.cacheMaxEntries)")
+
+            if capabilities.supportsDCacheFamily {
+                options.append("dir_cache=yes")
+                options.append("dcache_timeout=\(t)")
+                options.append("dcache_stat_timeout=\(t)")
+                options.append("dcache_dir_timeout=\(t)")
+                options.append("dcache_link_timeout=\(t)")
+            } else if capabilities.supportsOlderCacheFamily {
+                options.append("cache_stat_timeout=\(t)")
+                options.append("cache_dir_timeout=\(t)")
+                options.append("cache_link_timeout=\(t)")
+            }
         }
 
         options.append(contentsOf: [
