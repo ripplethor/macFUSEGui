@@ -62,6 +62,10 @@ actor MountManager {
     // Directory-query exit failures can also be transient around wake/network restore.
     // Keep a short grace window before declaring stale and forcing reconnect.
     private let maxDirectoryQueryFailurePreserveMisses = 2
+    // Some sshfs builds daemonize and report exit 0 slightly before the mounted path
+    // becomes visible to `df` / `mount`. Keep a bounded grace window so recovery does
+    // not stack duplicate reconnects on a mount that is still materializing.
+    private let postConnectMountDetectionTimeout: TimeInterval
     // After a cleanup-driven reconnect, give directory queries a short warm-up window
     // before they are allowed to trigger stale recovery again.
     private let directoryQueryReconnectCooldownSeconds: TimeInterval
@@ -89,6 +93,7 @@ actor MountManager {
         diagnostics: DiagnosticsService,
         commandBuilder: MountCommandBuilder,
         sshfsConnectCommandTimeout: TimeInterval = 20,
+        postConnectMountDetectionTimeout: TimeInterval = 15,
         directoryQueryReconnectCooldownSeconds: TimeInterval = 30
     ) {
         self.runner = runner
@@ -99,6 +104,7 @@ actor MountManager {
         self.diagnostics = diagnostics
         self.commandBuilder = commandBuilder
         self.sshfsConnectCommandTimeout = sshfsConnectCommandTimeout
+        self.postConnectMountDetectionTimeout = max(5, postConnectMountDetectionTimeout)
         self.directoryQueryReconnectCooldownSeconds = max(0, directoryQueryReconnectCooldownSeconds)
     }
 
@@ -1193,75 +1199,11 @@ actor MountManager {
                 )
             }
 
-            // After sshfs exits successfully, the mount should show up quickly.
-            // Keeping this short prevents "phantom hangs" when the system is unstable.
-            let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
-            let detectionDeadline = Date().addingTimeInterval(5)
-            while Date() < detectionDeadline {
-                if Task.isCancelled {
-                    throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
-                }
-
-                do {
-                    if let record = try await currentMountRecord(
-                        for: normalizedMountPoint,
-                        remoteID: remote.id,
-                        operationID: operationID,
-                        allowMountFallbackOnDFNotMounted: true
-                    ) {
-                        let status = RemoteStatus(
-                            state: .connected,
-                            mountedPath: record.mountPoint,
-                            lastError: nil,
-                            updatedAt: Date()
-                        )
-                        if updateStoredStatus {
-                            // Skip status cache updates in "test connection" mode.
-                            updateCachedStatus(status, for: remote.id)
-                        }
-                        return status
-                    }
-
-                    // Some mount output variants can be syntactically valid but not match our
-                    // parser shape. Use df fallback during connect detection to avoid false
-                    // negatives when sshfs has already established the mount.
-                    if let fallback = try await currentMountRecordViaDF(
-                        for: normalizedMountPoint,
-                        remoteID: remote.id,
-                        operationID: operationID
-                    ) {
-                        diagnostics.append(
-                            level: .warning,
-                            category: "mount",
-                            message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
-                        )
-                        let status = RemoteStatus(
-                            state: .connected,
-                            mountedPath: fallback.mountPoint,
-                            lastError: nil,
-                            updatedAt: Date()
-                        )
-                        if updateStoredStatus {
-                            updateCachedStatus(status, for: remote.id)
-                        }
-                        return status
-                    }
-                } catch {
-                    if Task.isCancelled {
-                        throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
-                    }
-                    // Mount-table probes can be flaky immediately after wake.
-                    // Keep trying until detection deadline instead of failing connect immediately.
-                    diagnostics.append(
-                        level: .debug,
-                        category: "mount",
-                        message: "Post-connect mount detection retry for \(remote.displayName): \(error.localizedDescription)"
-                    )
-                }
-                try await Task.sleep(nanoseconds: 250_000_000)
-            }
-
-            throw AppError.processFailure(L10n.tr("sshfs reported success, but mount was not detected."))
+            return try await waitForMountAppearance(
+                remote: remote,
+                updateStoredStatus: updateStoredStatus,
+                operationID: operationID
+            )
         }
 
         if remote.authMode == .password {
@@ -1275,6 +1217,112 @@ actor MountManager {
         }
 
         return try await runConnectAttempt(passwordEnvironment: [:])
+    }
+
+    private func waitForMountAppearance(
+        remote: RemoteConfig,
+        updateStoredStatus: Bool,
+        operationID: UUID?
+    ) async throws -> RemoteStatus {
+        let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
+        let waitStartedAt = Date()
+        let detectionDeadline = waitStartedAt.addingTimeInterval(postConnectMountDetectionTimeout)
+        var loggedExtendedWait = false
+
+        func connectedStatus(from record: MountRecord) -> RemoteStatus {
+            RemoteStatus(
+                state: .connected,
+                mountedPath: record.mountPoint,
+                lastError: nil,
+                updatedAt: Date()
+            )
+        }
+
+        while Date() < detectionDeadline {
+            if Task.isCancelled {
+                throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
+            }
+
+            if !loggedExtendedWait, Date().timeIntervalSince(waitStartedAt) >= 5 {
+                loggedExtendedWait = true
+                diagnostics.append(
+                    level: .warning,
+                    category: "mount",
+                    message: "sshfs exited successfully for \(remote.displayName), but \(normalizedMountPoint) is still not visible after 5s. Extending post-connect verification up to \(Int(postConnectMountDetectionTimeout.rounded()))s."
+                )
+            }
+
+            do {
+                if let record = try await currentMountRecord(
+                    for: normalizedMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID,
+                    allowMountFallbackOnDFNotMounted: true
+                ) {
+                    let status = connectedStatus(from: record)
+                    if updateStoredStatus {
+                        // Skip status cache updates in "test connection" mode.
+                        updateCachedStatus(status, for: remote.id)
+                    }
+                    return status
+                }
+
+                // Some mount output variants can be syntactically valid but not match our
+                // parser shape. Use df fallback during connect detection to avoid false
+                // negatives when sshfs has already established the mount.
+                if let fallback = try await currentMountRecordViaDF(
+                    for: normalizedMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                ) {
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
+                    )
+                    let status = connectedStatus(from: fallback)
+                    if updateStoredStatus {
+                        updateCachedStatus(status, for: remote.id)
+                    }
+                    return status
+                }
+            } catch {
+                if Task.isCancelled {
+                    throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
+                }
+                // Mount-table probes can be flaky immediately after wake.
+                // Keep trying until detection deadline instead of failing connect immediately.
+                diagnostics.append(
+                    level: .debug,
+                    category: "mount",
+                    message: "Post-connect mount detection retry for \(remote.displayName): \(error.localizedDescription)"
+                )
+            }
+
+            let pollIntervalNanoseconds: UInt64 = loggedExtendedWait ? 500_000_000 : 250_000_000
+            try await Task.sleep(nanoseconds: pollIntervalNanoseconds)
+        }
+
+        // Final mount-table-only check to catch a mount that appeared just as the grace
+        // window closed, without depending on one more `df` round-trip.
+        if let finalRecord = try? await currentMountRecordViaMountTable(
+            for: normalizedMountPoint,
+            remoteID: remote.id,
+            operationID: operationID
+        ) {
+            let status = connectedStatus(from: finalRecord)
+            if updateStoredStatus {
+                updateCachedStatus(status, for: remote.id)
+            }
+            diagnostics.append(
+                level: .warning,
+                category: "mount",
+                message: "Post-connect detection needed a final mount-table confirmation for \(remote.displayName) at \(normalizedMountPoint)."
+            )
+            return status
+        }
+
+        throw AppError.processFailure(L10n.tr("sshfs reported success, but mount was not detected."))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
