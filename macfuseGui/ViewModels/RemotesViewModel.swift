@@ -1869,17 +1869,22 @@ final class RemotesViewModel: ObservableObject {
         guard desiredConnections.contains(remote.id) else {
             return
         }
-        guard !wakePreflightInProgress else {
+        let currentState = status(for: remote.id).state
+        guard Self.shouldHandleExternalUnmount(
+            currentState: currentState,
+            wakePreflightInProgress: wakePreflightInProgress
+        ) else {
+            let reason: String
+            if wakePreflightInProgress {
+                reason = "wake preflight cleanup"
+            } else {
+                reason = "an active connect/disconnect operation"
+            }
             diagnostics.append(
                 level: .debug,
                 category: "recovery",
-                message: "Ignoring external unmount for \(remote.displayName) during wake preflight cleanup."
+                message: "Ignoring external unmount for \(remote.displayName) during \(reason)."
             )
-            return
-        }
-
-        let currentState = status(for: remote.id).state
-        guard currentState != .disconnecting else {
             return
         }
 
@@ -2827,6 +2832,17 @@ final class RemotesViewModel: ObservableObject {
             && (newTrigger == .recovery || newTrigger == .startup)
             && (existingIntent == .connect || existingIntent == .refresh)
             && elapsedSeconds >= thresholdSeconds
+    }
+
+    nonisolated static func shouldHandleExternalUnmount(
+        currentState: RemoteConnectionState,
+        wakePreflightInProgress: Bool
+    ) -> Bool {
+        guard !wakePreflightInProgress else {
+            return false
+        }
+
+        return currentState != .connecting && currentState != .disconnecting
     }
 
     nonisolated static func shouldStartConnectOperation(from currentState: RemoteConnectionState) -> Bool {

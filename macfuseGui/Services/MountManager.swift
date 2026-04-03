@@ -545,7 +545,8 @@ actor MountManager {
             try throwIfCancelled()
             var preConnectCleanupPerformed = false
             // If mount path is already mounted, clear stale/previous mount before reconnect.
-            let existingMountRecord: MountRecord?
+            var existingMountRecord: MountRecord?
+            var preConnectInspectionError: Error?
             do {
                 if fastPreConnectCleanup {
                     diagnostics.append(
@@ -566,13 +567,39 @@ actor MountManager {
                     )
                 }
             } catch {
-                // Pre-connect inspection is best-effort. If probing mount state is flaky
-                // right after wake, still attempt connect so recovery does not stall.
+                preConnectInspectionError = error
                 existingMountRecord = nil
+            }
+
+            if existingMountRecord == nil {
+                existingMountRecord = await currentMountRecordViaDistinctFilesystemCheck(
+                    for: remote.localMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                )
+            }
+
+            if let error = preConnectInspectionError {
+                if existingMountRecord != nil {
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Pre-connect mount inspection failed for \(remote.displayName) at \(remote.localMountPoint). Using distinct-filesystem fallback for cleanup: \(error.localizedDescription)"
+                    )
+                } else {
+                    // Pre-connect inspection is best-effort. If probing mount state is flaky
+                    // right after wake, still attempt connect so recovery does not stall.
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Pre-connect mount inspection failed for \(remote.displayName) at \(remote.localMountPoint). Continuing with connect attempt: \(error.localizedDescription)"
+                    )
+                }
+            } else if existingMountRecord?.source == "distinct-device-check" {
                 diagnostics.append(
                     level: .warning,
                     category: "mount",
-                    message: "Pre-connect mount inspection failed for \(remote.displayName) at \(remote.localMountPoint). Continuing with connect attempt: \(error.localizedDescription)"
+                    message: "Pre-connect cleanup for \(remote.displayName) at \(remote.localMountPoint) is using distinct-filesystem fallback because mount-table probes did not identify the mounted volume."
                 )
             }
 
@@ -936,9 +963,13 @@ actor MountManager {
                     operationID: operationID
                 ) != nil
             } catch {
-                // Treat inconclusive mount-table checks as "still mounted" so reconnect
-                // cleanup does not race ahead on a false negative.
-                mounted = true
+                // If mount-table probes are flaky, fall back to a filesystem-boundary
+                // check so reconnect cleanup can still observe that force-unmount settled.
+                mounted = await currentMountRecordViaDistinctFilesystemCheck(
+                    for: remote.localMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                ) != nil
             }
             if !mounted {
                 return true
@@ -1286,10 +1317,45 @@ actor MountManager {
                     }
                     return status
                 }
+
+                if let distinctFilesystemFallback = await currentMountRecordViaDistinctFilesystemCheck(
+                    for: normalizedMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                ) {
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Post-connect detection recovered via distinct-filesystem fallback for \(remote.displayName) at \(normalizedMountPoint)."
+                    )
+                    let status = connectedStatus(from: distinctFilesystemFallback)
+                    if updateStoredStatus {
+                        updateCachedStatus(status, for: remote.id)
+                    }
+                    return status
+                }
             } catch {
                 if Task.isCancelled {
                     throw AppError.timeout(L10n.tr("Mount operation was cancelled."))
                 }
+
+                if let distinctFilesystemFallback = await currentMountRecordViaDistinctFilesystemCheck(
+                    for: normalizedMountPoint,
+                    remoteID: remote.id,
+                    operationID: operationID
+                ) {
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "Post-connect detection recovered via distinct-filesystem fallback for \(remote.displayName) at \(normalizedMountPoint) after mount inspection failed."
+                    )
+                    let status = connectedStatus(from: distinctFilesystemFallback)
+                    if updateStoredStatus {
+                        updateCachedStatus(status, for: remote.id)
+                    }
+                    return status
+                }
+
                 // Mount-table probes can be flaky immediately after wake.
                 // Keep trying until detection deadline instead of failing connect immediately.
                 diagnostics.append(
@@ -1318,6 +1384,23 @@ actor MountManager {
                 level: .warning,
                 category: "mount",
                 message: "Post-connect detection needed a final mount-table confirmation for \(remote.displayName) at \(normalizedMountPoint)."
+            )
+            return status
+        }
+
+        if let distinctFilesystemFallback = await currentMountRecordViaDistinctFilesystemCheck(
+            for: normalizedMountPoint,
+            remoteID: remote.id,
+            operationID: operationID
+        ) {
+            let status = connectedStatus(from: distinctFilesystemFallback)
+            if updateStoredStatus {
+                updateCachedStatus(status, for: remote.id)
+            }
+            diagnostics.append(
+                level: .warning,
+                category: "mount",
+                message: "Post-connect detection needed a final distinct-filesystem confirmation for \(remote.displayName) at \(normalizedMountPoint)."
             )
             return status
         }
@@ -1561,6 +1644,47 @@ actor MountManager {
         throw AppError.processFailure(L10n.format("Failed to inspect mounts: %@", lastFailure))
     }
 
+    private func currentMountRecordViaDistinctFilesystemCheck(
+        for mountPoint: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil
+    ) async -> MountRecord? {
+        let normalizedMountPoint = LocalPathNormalizer.normalize(mountPoint)
+        guard let parentPath = parentDirectoryPath(for: normalizedMountPoint) else {
+            return nil
+        }
+
+        guard let mountDeviceID = await filesystemDeviceID(
+            for: normalizedMountPoint,
+            label: "target",
+            remoteID: remoteID,
+            operationID: operationID
+        ),
+        let parentDeviceID = await filesystemDeviceID(
+            for: parentPath,
+            label: "parent",
+            remoteID: remoteID,
+            operationID: operationID
+        ) else {
+            return nil
+        }
+
+        guard mountDeviceID != parentDeviceID else {
+            return nil
+        }
+
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "Distinct-filesystem fallback confirmed mounted volume at \(normalizedMountPoint) remoteID=\(remoteID?.uuidString ?? "-") operationID=\(operationID?.uuidString ?? "-") targetDevice=\(mountDeviceID) parentDevice=\(parentDeviceID)"
+        )
+        return MountRecord(
+            source: "distinct-device-check",
+            mountPoint: normalizedMountPoint,
+            filesystemType: "unknown"
+        )
+    }
+
     private func currentMountRecordViaDFLookup(
         for mountPoint: String,
         remoteID: UUID? = nil,
@@ -1647,6 +1771,69 @@ actor MountManager {
         let decodedMountedField = mountStateParser.decodeEscapedMountField(mountedField)
         let mountedOn = LocalPathNormalizer.normalize(decodedMountedField)
         return (source, mountedOn)
+    }
+
+    private func filesystemDeviceID(
+        for path: String,
+        label: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil
+    ) async -> String? {
+        if Task.isCancelled {
+            return nil
+        }
+
+        let normalizedPath = LocalPathNormalizer.normalize(path)
+        let remoteText = remoteID?.uuidString ?? "-"
+        let operationText = operationID?.uuidString ?? "-"
+        let startedAt = Date()
+        diagnostics.append(
+            level: .debug,
+            category: "mount",
+            message: "probe start op=mount-device-check remoteID=\(remoteText) operationID=\(operationText) role=\(label) path=\(normalizedPath)"
+        )
+
+        do {
+            let result = try await runner.run(
+                executable: "/usr/bin/stat",
+                arguments: ["-f", "%d", normalizedPath],
+                timeout: mountResponsivenessTimeout
+            )
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe end op=mount-device-check remoteID=\(remoteText) operationID=\(operationText) role=\(label) path=\(normalizedPath) elapsedMs=\(elapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
+            )
+
+            guard !result.timedOut, result.exitCode == 0 else {
+                return nil
+            }
+
+            let deviceID = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            return deviceID.isEmpty ? nil : deviceID
+        } catch {
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe end op=mount-device-check remoteID=\(remoteText) operationID=\(operationText) role=\(label) path=\(normalizedPath) elapsedMs=\(elapsedMs) error=\(error.localizedDescription)"
+            )
+            return nil
+        }
+    }
+
+    private func parentDirectoryPath(for path: String) -> String? {
+        let normalized = LocalPathNormalizer.normalize(path)
+        guard !normalized.isEmpty, normalized != "/" else {
+            return nil
+        }
+
+        let parent = LocalPathNormalizer.normalize((normalized as NSString).deletingLastPathComponent)
+        guard !parent.isEmpty, parent != normalized else {
+            return nil
+        }
+        return parent
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

@@ -276,6 +276,36 @@ final class RemotesViewModelHelpersTests: XCTestCase {
         )
     }
 
+    func testExternalUnmountIsIgnoredDuringWakePreflightOrActiveConnectDisconnect() {
+        XCTAssertFalse(
+            RemotesViewModel.shouldHandleExternalUnmount(
+                currentState: .connected,
+                wakePreflightInProgress: true
+            )
+        )
+
+        XCTAssertFalse(
+            RemotesViewModel.shouldHandleExternalUnmount(
+                currentState: .connecting,
+                wakePreflightInProgress: false
+            )
+        )
+
+        XCTAssertFalse(
+            RemotesViewModel.shouldHandleExternalUnmount(
+                currentState: .disconnecting,
+                wakePreflightInProgress: false
+            )
+        )
+
+        XCTAssertTrue(
+            RemotesViewModel.shouldHandleExternalUnmount(
+                currentState: .connected,
+                wakePreflightInProgress: false
+            )
+        )
+    }
+
     func testConnectOperationMayRestartFromConnectingState() {
         XCTAssertTrue(RemotesViewModel.shouldStartConnectOperation(from: .connecting))
         XCTAssertTrue(RemotesViewModel.shouldStartConnectOperation(from: .error))

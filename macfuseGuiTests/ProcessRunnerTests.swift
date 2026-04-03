@@ -370,6 +370,28 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertLessThan(elapsed, 2.0, "Mount-table fallback should recover connect quickly when df still shows the parent filesystem.")
     }
 
+    /// Beginner note: Some wake/recovery windows leave both `df` and `/sbin/mount`
+    /// temporarily unreliable even though the mount point has already switched to a
+    /// new filesystem. Connect should use that distinct-filesystem signal and finish.
+    func testConnectUsesDistinctFilesystemFallbackWhenDFShowsParentAndMountInspectionTimesOut() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/connect-device-fallback"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            mountInspectionDelay: 1.8,
+            dfVisibilityDelayByMountPoint: [mountPoint: 10]
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Connect Device Fallback", mountPoint: mountPoint)
+
+        let startedAt = Date()
+        let status = await manager.connect(remote: remote, password: nil)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 6.0, "Distinct-filesystem fallback should keep connect bounded when df and mount inspection are both flaky.")
+    }
+
     /// Beginner note: Some sshfs builds return exit 0 before the mount becomes visible
     /// to either `df` or `/sbin/mount`. Connect should wait within a bounded grace window
     /// instead of declaring failure and triggering duplicate recovery reconnects.
@@ -443,6 +465,32 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertEqual(status.state, .connected)
         XCTAssertEqual(status.mountedPath, mountPoint)
         XCTAssertLessThan(elapsed, 2.8, "Recovery cleanup should avoid waiting on slow stale df probes.")
+    }
+
+    /// Beginner note: If mount-table inspection times out during recovery cleanup but the
+    /// path is still a mounted filesystem, pre-connect cleanup should still clear it before
+    /// the next sshfs attempt instead of hitting the nested-macFUSE error.
+    func testRecoveryConnectUsesDistinctFilesystemFallbackWhenMountInspectionTimesOut() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/recovery-device-fallback"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            mountInspectionDelay: 1.8
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Recovery Device Fallback", mountPoint: mountPoint)
+
+        let startedAt = Date()
+        let status = await manager.connect(
+            remote: remote,
+            password: nil,
+            fastPreConnectCleanup: true
+        )
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(status.state, .connected)
+        XCTAssertEqual(status.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 6.0, "Distinct-filesystem fallback should keep recovery cleanup bounded when mount inspection times out.")
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -897,6 +945,22 @@ private actor FakeMountRunner: ProcessRunning {
         if executable == "/usr/bin/stat", let path = arguments.last {
             materializePendingMounts()
             materializePendingUnmounts()
+            if arguments.count >= 2, arguments[0] == "-f", arguments[1] == "%d" {
+                let deviceID = filesystemDeviceID(for: path)
+                let exists = mountedPoints.contains(path)
+                    || alwaysResponsivePaths.contains(path)
+                    || FileManager.default.fileExists(atPath: path)
+                    || deviceID != "1000"
+                return ProcessResult(
+                    executable: executable,
+                    arguments: arguments,
+                    stdout: exists ? deviceID : "",
+                    stderr: exists ? "" : "No such file or directory",
+                    exitCode: exists ? 0 : 1,
+                    timedOut: false,
+                    duration: Date().timeIntervalSince(startedAt)
+                )
+            }
             let isMounted = mountedPoints.contains(path) || alwaysResponsivePaths.contains(path)
             return ProcessResult(
                 executable: executable,
@@ -991,6 +1055,13 @@ private actor FakeMountRunner: ProcessRunning {
         }
         let activatedAt = mountActivatedAtByMountPoint[mountPoint] ?? .distantPast
         return Date().timeIntervalSince(activatedAt) >= requiredDelay
+    }
+
+    private func filesystemDeviceID(for path: String) -> String {
+        if let mountedIndex = mountedPoints.sorted().firstIndex(of: path) {
+            return String(2_000 + mountedIndex)
+        }
+        return "1000"
     }
 
     private func materializePendingMounts() {
