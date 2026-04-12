@@ -512,11 +512,15 @@ final class MountManagerParallelOperationTests: XCTestCase {
         let first = await manager.refreshStatus(remote: remote)
         let second = await manager.refreshStatus(remote: remote)
         let third = await manager.refreshStatus(remote: remote)
+        let fourth = await manager.refreshStatus(remote: remote)
+        let fifth = await manager.refreshStatus(remote: remote)
 
         XCTAssertEqual(first.state, .connected)
         XCTAssertEqual(second.state, .connected)
-        XCTAssertEqual(third.state, .error)
-        XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("could not be verified"))
+        XCTAssertEqual(third.state, .connected)
+        XCTAssertEqual(fourth.state, .connected)
+        XCTAssertEqual(fifth.state, .error)
+        XCTAssertTrue((fifth.lastError ?? "").localizedCaseInsensitiveContains("could not be verified"))
     }
 
     /// Beginner note: A stale FUSE mount can pass metadata stat probes but fail directory queries.
@@ -597,6 +601,33 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertEqual(second.state, .connected)
         XCTAssertEqual(third.state, .error)
         XCTAssertTrue((third.lastError ?? "").localizedCaseInsensitiveContains("stale mount"))
+    }
+
+    /// Beginner note: Periodic/startup refresh can begin from a disconnected cached state
+    /// even when the volume is already mounted. If `df -P` still resolves to the parent
+    /// filesystem in that window, refresh should fall back to mount-table inspection instead
+    /// of declaring the mount disconnected and triggering a redundant reconnect.
+    func testStartupRefreshFallsBackToMountInspectionWhenDFStillShowsParentFilesystem() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/startup-refresh-mount-fallback"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            dfVisibilityDelayByMountPoint: [mountPoint: 10]
+        )
+        await runner.simulateExternalMount(mountPoint: mountPoint)
+
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Startup Refresh Mount Fallback", mountPoint: mountPoint)
+
+        let initialStatus = await manager.status(for: remote.id)
+        XCTAssertEqual(initialStatus.state, .disconnected)
+
+        let startedAt = Date()
+        let refreshed = await manager.refreshStatus(remote: remote)
+        let elapsed = Date().timeIntervalSince(startedAt)
+
+        XCTAssertEqual(refreshed.state, .connected)
+        XCTAssertEqual(refreshed.mountedPath, mountPoint)
+        XCTAssertLessThan(elapsed, 2.0, "Refresh should recover via mount-table fallback instead of reconnecting a healthy mount.")
     }
 
     /// Beginner note: Startup refresh should apply the same short grace window for

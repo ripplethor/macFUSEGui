@@ -177,7 +177,8 @@ actor MountManager {
             var mountedRecord = try await currentMountRecord(
                 for: remote.localMountPoint,
                 remoteID: remote.id,
-                operationID: operationID
+                operationID: operationID,
+                allowMountFallbackOnDFNotMounted: true
             )
             if let cancelled = cancelledStatus() {
                 return cancelled
