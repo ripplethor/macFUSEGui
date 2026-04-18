@@ -12,6 +12,28 @@ import XCTest
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class ProcessRunnerTests: XCTestCase {
+    func testEnvTestResolvesSystemTestBinaryOnMacOS() async throws {
+        let runner = ProcessRunner()
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("process-runner-test-\(UUID().uuidString)")
+        try Data("secret".utf8).write(to: fileURL, options: [.atomic])
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+
+        let result = try await runner.run(
+            executable: "/usr/bin/env",
+            arguments: ["test", "-f", fileURL.path],
+            environment: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"],
+            timeout: 1.5
+        )
+
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.executable, "/usr/bin/env")
+        XCTAssertEqual(result.arguments, ["test", "-f", fileURL.path])
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This is async and throwing: callers must await it and handle failures.
     func testTimedOutNoisyProcessReturnsSafely() async throws {
@@ -1022,25 +1044,12 @@ private actor FakeMountRunner: ProcessRunning {
             )
         }
 
-        if executable == "/usr/bin/test", let flag = arguments.first, let path = arguments.last, flag != path {
-            let exists: Bool
-            if flag == "-f" {
-                var isDir: ObjCBool = false
-                exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && !isDir.boolValue
-            } else if flag == "-r" {
-                exists = FileManager.default.isReadableFile(atPath: path)
-            } else {
-                exists = FileManager.default.fileExists(atPath: path)
-            }
-            return ProcessResult(
-                executable: executable,
-                arguments: arguments,
-                stdout: "",
-                stderr: exists ? "" : "test: \(path): No such file or directory",
-                exitCode: exists ? 0 : 1,
-                timedOut: false,
-                duration: Date().timeIntervalSince(startedAt)
-            )
+        if let simulatedTestResult = simulatedTestResult(
+            executable: executable,
+            arguments: arguments,
+            startedAt: startedAt
+        ) {
+            return simulatedTestResult
         }
 
         if executable == "/usr/sbin/diskutil" || executable == "/sbin/umount" {
@@ -1070,6 +1079,46 @@ private actor FakeMountRunner: ProcessRunning {
             stdout: "",
             stderr: "",
             exitCode: 0,
+            timedOut: false,
+            duration: Date().timeIntervalSince(startedAt)
+        )
+    }
+
+    private func simulatedTestResult(
+        executable: String,
+        arguments: [String],
+        startedAt: Date
+    ) -> ProcessResult? {
+        let probeArguments: [String]
+        if executable == "/usr/bin/test" {
+            probeArguments = arguments
+        } else if executable == "/usr/bin/env", arguments.first == "test" {
+            probeArguments = Array(arguments.dropFirst())
+        } else {
+            return nil
+        }
+
+        guard let flag = probeArguments.first,
+              let path = probeArguments.last,
+              flag != path else {
+            return nil
+        }
+
+        let exists: Bool
+        if flag == "-f" {
+            var isDir: ObjCBool = false
+            exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && !isDir.boolValue
+        } else if flag == "-r" {
+            exists = FileManager.default.isReadableFile(atPath: path)
+        } else {
+            exists = FileManager.default.fileExists(atPath: path)
+        }
+        return ProcessResult(
+            executable: executable,
+            arguments: arguments,
+            stdout: "",
+            stderr: exists ? "" : "test: \(path): No such file or directory",
+            exitCode: exists ? 0 : 1,
             timedOut: false,
             duration: Date().timeIntervalSince(startedAt)
         )

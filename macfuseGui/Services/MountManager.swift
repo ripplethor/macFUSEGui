@@ -55,6 +55,9 @@ actor MountManager {
     private let mountResponsivenessTimeout: TimeInterval = 1.5
     // Directory queries can be slower than metadata probes on healthy network mounts.
     private let mountDirectoryQueryTimeout: TimeInterval = 3.5
+    // Finder-launched apps do not always inherit an interactive shell PATH.
+    // Keep system utility resolution deterministic for bounded probe commands.
+    private let systemUtilityPATH = "/usr/bin:/bin:/usr/sbin:/sbin"
     // Prevent indefinite "connected" false-positives when mount table parsing fails but local path still exists.
     private let maxConnectedPreserveMisses = 4
     // Treat one-off directory query timeouts as transient before forcing recovery.
@@ -1124,11 +1127,7 @@ actor MountManager {
         let probeTimeout: TimeInterval = 1.5
 
         do {
-            let existsResult = try await runner.run(
-                executable: "/usr/bin/test",
-                arguments: ["-f", keyPath],
-                timeout: probeTimeout
-            )
+            let existsResult = try await runSystemTestProbe(arguments: ["-f", keyPath], timeout: probeTimeout)
             if existsResult.timedOut {
                 throw AppError.validationFailed([
                     L10n.tr("Private key path is not responding. Move the key to a local folder and retry.")
@@ -1138,11 +1137,7 @@ actor MountManager {
                 throw AppError.validationFailed([L10n.tr("Private key file does not exist.")])
             }
 
-            let readableResult = try await runner.run(
-                executable: "/usr/bin/test",
-                arguments: ["-r", keyPath],
-                timeout: probeTimeout
-            )
+            let readableResult = try await runSystemTestProbe(arguments: ["-r", keyPath], timeout: probeTimeout)
             if readableResult.timedOut {
                 throw AppError.validationFailed([
                     L10n.tr("Private key path is not responding. Move the key to a local folder and retry.")
@@ -1158,6 +1153,18 @@ actor MountManager {
                 L10n.format("Could not validate the private key path: %@", error.localizedDescription)
             ])
         }
+    }
+
+    private func runSystemTestProbe(
+        arguments: [String],
+        timeout: TimeInterval
+    ) async throws -> ProcessResult {
+        try await runner.run(
+            executable: "/usr/bin/env",
+            arguments: ["test"] + arguments,
+            environment: ["PATH": systemUtilityPATH],
+            timeout: timeout
+        )
     }
 
     /// Resolves SSHFS capabilities for a given binary, caching the result per path.
