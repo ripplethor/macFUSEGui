@@ -15,6 +15,7 @@ final class LocalizationTests: XCTestCase {
     func testEnglishProductionStringsRemainReadable() {
         XCTAssertEqual(RemoteAuth.password.displayName, "Password")
         XCTAssertEqual(RemoteAuth.privateKey.displayName, "SSH Private Key")
+        XCTAssertEqual(RemoteAuth.systemSSH.displayName, "System SSH")
         XCTAssertEqual(AppError.timeout("x").failureReason, "The operation exceeded its time limit.")
         XCTAssertEqual(AppError.timeout("x").recoverySuggestion, "Check network/system load and retry.")
     }

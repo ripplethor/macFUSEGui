@@ -154,7 +154,15 @@ Mount inspection anti-flap logic (important):
 Command builder nuances:
 - Windows path normalization for sshfs source path.
 - Stable `volname` derivation from display name + remote path leaf.
-- Password-specific ssh options that previously broke macFUSE are intentionally omitted.
+- Password mode now disables public-key fallback and prefers password-style auth
+  (`keyboard-interactive,password`) with a single prompt so a wrong password
+  cannot silently succeed through agent/config-driven auth.
+- On the current Homebrew macOS sshfs build, these password-mode auth controls
+  are injected through `ssh_command=/usr/bin/ssh -o ...`, not as raw
+  `-o PubkeyAuthentication=...` mount options, because that binary rejects the
+  latter at the FUSE parser layer.
+- Keep `keyboard-interactive` enabled unless you are intentionally dropping
+  support for servers that expose password prompts through that path.
 - IPv6 host addresses are bracketed (`[::1]`) via `sshHostArgument()` in both the sshfs source arg (`MountCommandBuilder`) and the process-search connection needle (`MountManager.forceStopProcesses`). `ValidationService` enforces pre-bracketed input at the save boundary; `sshHostArgument()` is defence-in-depth for any path that bypasses validation.
 
 df path decoding:

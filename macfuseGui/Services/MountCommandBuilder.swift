@@ -111,11 +111,17 @@ final class MountCommandBuilder {
             "volname=\(escapedOptionValue(volumeName(for: remote, normalizedRemotePath: normalizedRemotePath)))"
         ])
 
-        if remote.authMode == .privateKey,
-           let key = remote.privateKeyPath,
-           !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let normalizedKeyPath = LocalPathNormalizer.normalize(key)
-            options.append("IdentityFile=\(escapedOptionValue(normalizedKeyPath))")
+        switch remote.authMode {
+        case .privateKey:
+            if let key = remote.privateKeyPath,
+               !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let normalizedKeyPath = LocalPathNormalizer.normalize(key)
+                options.append("IdentityFile=\(escapedOptionValue(normalizedKeyPath))")
+            }
+        case .password:
+            options.append("ssh_command=\(escapedOptionValue(passwordPinnedSSHCommand()))")
+        case .systemSSH:
+            break
         }
 
         var args: [String] = ["-p", "\(remote.port)"]
@@ -253,6 +259,21 @@ final class MountCommandBuilder {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: ",", with: "\\,")
+    }
+
+    /// Builds an explicit ssh invocation for password mode because this Homebrew
+    /// sshfs build rejects several raw ssh_config-style `-o SSHOPT=VAL` options
+    /// at the FUSE parser layer. Pinning auth inside `ssh_command=...` avoids
+    /// agent/public-key fallback while remaining compatible with this binary.
+    private func passwordPinnedSSHCommand() -> String {
+        [
+            "/usr/bin/ssh",
+            "-o", "PubkeyAuthentication=no",
+            "-o", "KbdInteractiveAuthentication=yes",
+            "-o", "PasswordAuthentication=yes",
+            "-o", "PreferredAuthentications=keyboard-interactive,password",
+            "-o", "NumberOfPasswordPrompts=1"
+        ].joined(separator: " ")
     }
 }
 

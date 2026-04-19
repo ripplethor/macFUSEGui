@@ -3202,6 +3202,11 @@ final class RemotesViewModel: ObservableObject {
         guard !shutdownInProgress else {
             throw AppError.unknown(L10n.tr("App is shutting down."))
         }
+        if draft.authMode == .systemSSH {
+            throw AppError.validationFailed([
+                L10n.tr("Remote browser does not support System SSH auth yet. Use Password or SSH Private Key for browsing.")
+            ])
+        }
         let remote = draft.asRemoteConfig()
         let passwordToUse = try await browserPassword(for: draft)
         let sessionID = await remoteDirectoryBrowserService.openSession(remote: remote, password: passwordToUse)

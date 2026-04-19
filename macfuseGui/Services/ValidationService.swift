@@ -96,6 +96,8 @@ final class ValidationService {
                 // `isReadableFile` checks here would beachball save/test flows.
                 // MountManager performs bounded readiness probes during connect/test.
             }
+        case .systemSSH:
+            break
         case .password:
             if !hasStoredPassword && draft.password.isEmpty {
                 errors.append(L10n.tr("Password is required for password authentication."))

@@ -132,8 +132,8 @@ struct RemoteEditorView: View {
 
                     editorChip(
                         text: viewModel.draft.authMode.displayName,
-                        systemImage: viewModel.draft.authMode == .privateKey ? "key.fill" : "lock.fill",
-                        tint: viewModel.draft.authMode == .privateKey ? .teal : .blue
+                        systemImage: viewModel.draft.authMode.systemImageName,
+                        tint: authModeTint
                     )
                 }
 
@@ -144,9 +144,9 @@ struct RemoteEditorView: View {
 
                 HStack(spacing: 8) {
                     editorChip(
-                        text: canBrowseRemote ? L10n.tr("Browser Ready") : L10n.tr("Needs Host + User"),
-                        systemImage: canBrowseRemote ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
-                        tint: canBrowseRemote ? .green : .orange
+                        text: browserStatusText,
+                        systemImage: browserStatusSystemImage,
+                        tint: browserStatusTint
                     )
                 }
             }
@@ -231,7 +231,8 @@ struct RemoteEditorView: View {
                 .labelsHidden()
             }
 
-            if viewModel.draft.authMode == .privateKey {
+            switch viewModel.draft.authMode {
+            case .privateKey:
                 editorField(title: "Private Key", detail: "Choose the SSH identity file for this remote.") {
                     HStack(spacing: 8) {
                         TextField("~/.ssh/id_ed25519", text: $viewModel.draft.privateKeyPath)
@@ -246,7 +247,13 @@ struct RemoteEditorView: View {
                     message: "It avoids clipboard mistakes, keeps the profile cleaner, and is usually the most reliable SSHFS path.",
                     tint: .teal
                 )
-            } else {
+            case .systemSSH:
+                infoCallout(
+                    title: "System SSH uses your existing OpenSSH setup",
+                    message: "Use this for SSH agent, macOS agent-backed keys, ~/.ssh/config-driven hosts, and Tailscale SSH. macfuseGui will not append an explicit IdentityFile in this mode.",
+                    tint: .indigo
+                )
+            case .password:
                 editorField(title: "Password", detail: "Stored securely in the macOS Keychain after save.") {
                     HStack(spacing: 8) {
                         Group {
@@ -338,9 +345,9 @@ struct RemoteEditorView: View {
                 )
             } else if !canBrowseRemote {
                 infoCallout(
-                    title: "Remote browser locked",
-                    message: "Enter both host and username first. The browser opens a real SSH session and needs enough information to authenticate.",
-                    tint: .orange
+                    title: remoteBrowserUnavailableTitle,
+                    message: remoteBrowserUnavailableMessage,
+                    tint: remoteBrowserUnavailableTint
                 )
             }
 
@@ -504,8 +511,67 @@ struct RemoteEditorView: View {
     }
 
     private var canBrowseRemote: Bool {
+        hasRemoteBrowserEndpoint && viewModel.draft.authMode != .systemSSH
+    }
+
+    private var hasRemoteBrowserEndpoint: Bool {
         !viewModel.draft.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !viewModel.draft.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var authModeTint: Color {
+        switch viewModel.draft.authMode {
+        case .privateKey:
+            return .teal
+        case .systemSSH:
+            return .indigo
+        case .password:
+            return .blue
+        }
+    }
+
+    private var browserStatusText: String {
+        if !hasRemoteBrowserEndpoint {
+            return L10n.tr("Needs Host + User")
+        }
+        if viewModel.draft.authMode == .systemSSH {
+            return L10n.tr("Browser Unsupported")
+        }
+        return L10n.tr("Browser Ready")
+    }
+
+    private var browserStatusSystemImage: String {
+        if canBrowseRemote {
+            return "checkmark.circle.fill"
+        }
+        return viewModel.draft.authMode == .systemSSH && hasRemoteBrowserEndpoint
+            ? "exclamationmark.triangle.fill"
+            : "exclamationmark.circle.fill"
+    }
+
+    private var browserStatusTint: Color {
+        if canBrowseRemote {
+            return .green
+        }
+        return viewModel.draft.authMode == .systemSSH && hasRemoteBrowserEndpoint ? .yellow : .orange
+    }
+
+    private var remoteBrowserUnavailableTitle: String {
+        if !hasRemoteBrowserEndpoint {
+            return L10n.tr("Remote browser locked")
+        }
+        return L10n.tr("Remote browser unavailable")
+    }
+
+    private var remoteBrowserUnavailableMessage: String {
+        if !hasRemoteBrowserEndpoint {
+            return L10n.tr("Enter both host and username first. The browser opens a real SSH session and needs enough information to authenticate.")
+        }
+        return L10n.tr("The remote browser uses libssh2 and currently supports Password or SSH Private Key auth only. System SSH mode still works for Finder mounts and Test Connection.")
+    }
+
+    private var remoteBrowserUnavailableTint: Color {
+        !hasRemoteBrowserEndpoint ? .orange : .yellow
     }
 
     private var hasInlineFeedback: Bool {

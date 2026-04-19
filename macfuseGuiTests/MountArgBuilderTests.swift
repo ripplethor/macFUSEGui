@@ -85,7 +85,7 @@ final class MountArgBuilderTests: XCTestCase {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    func testRedactsPasswordEnvironmentValues() {
+    func testRedactsPasswordEnvironmentValuesAndPinsPasswordAuth() {
         let builder = MountCommandBuilder(redactionService: RedactionService())
         let remote = RemoteConfig(
             displayName: "Server",
@@ -109,10 +109,14 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertTrue(command.redactedCommand.contains("ServerAliveInterval=15"))
         XCTAssertTrue(command.redactedCommand.contains("dev@example.com:/srv"))
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("volname=Server - srv"))
-        XCTAssertFalse(command.arguments.joined(separator: " ").contains("PreferredAuthentications="))
-        XCTAssertFalse(command.arguments.joined(separator: " ").contains("KbdInteractiveAuthentication="))
-        XCTAssertFalse(command.arguments.joined(separator: " ").contains("PasswordAuthentication="))
-        XCTAssertFalse(command.arguments.joined(separator: " ").contains("PubkeyAuthentication="))
+        XCTAssertFalse(command.arguments.contains("PreferredAuthentications=keyboard-interactive,password"))
+        XCTAssertFalse(command.arguments.contains("KbdInteractiveAuthentication=yes"))
+        XCTAssertFalse(command.arguments.contains("PasswordAuthentication=yes"))
+        XCTAssertFalse(command.arguments.contains("PubkeyAuthentication=no"))
+        XCTAssertFalse(command.arguments.contains("NumberOfPasswordPrompts=1"))
+        XCTAssertTrue(command.arguments.contains(
+            "ssh_command=/usr/bin/ssh -o PubkeyAuthentication=no -o KbdInteractiveAuthentication=yes -o PasswordAuthentication=yes -o PreferredAuthentications=keyboard-interactive\\,password -o NumberOfPasswordPrompts=1"
+        ))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -207,6 +211,28 @@ final class MountArgBuilderTests: XCTestCase {
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
         XCTAssertTrue(command.arguments.contains("IdentityFile=/Users/dev/.ssh/id_ed25519"))
+    }
+
+    func testSystemSSHModeOmitsIdentityFile() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Tailscale Host",
+            host: "tailnode.ts.net",
+            port: 22,
+            username: "philip",
+            authMode: .systemSSH,
+            privateKeyPath: "/Users/philip/.ssh/id_ed25519",
+            remoteDirectory: "/home/philip",
+            localMountPoint: "/Volumes/tailscale-host"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+        XCTAssertFalse(command.arguments.joined(separator: " ").contains("IdentityFile="))
+        XCTAssertFalse(command.arguments.joined(separator: " ").contains("PreferredAuthentications="))
+        XCTAssertFalse(command.arguments.joined(separator: " ").contains("KbdInteractiveAuthentication="))
+        XCTAssertFalse(command.arguments.joined(separator: " ").contains("PasswordAuthentication="))
+        XCTAssertFalse(command.arguments.joined(separator: " ").contains("PubkeyAuthentication="))
+        XCTAssertTrue(command.arguments.contains("philip@tailnode.ts.net:/home/philip"))
     }
 
     func testPlainHostnameIsNotBracketed() {

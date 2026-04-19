@@ -134,6 +134,24 @@ final class ValidationServiceTests: XCTestCase {
         XCTAssertTrue(errors.isEmpty)
     }
 
+    func testValidationAllowsSystemSSHWithoutPasswordOrPrivateKey() {
+        let draft = RemoteDraft(
+            displayName: "System SSH Remote",
+            host: "tailnode.ts.net",
+            port: 22,
+            username: "philip",
+            authMode: .systemSSH,
+            privateKeyPath: "",
+            password: "",
+            remoteDirectory: "/home/philip",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.isEmpty)
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     func testValidationRejectsHostWithControlCharacter() {
         let draft = RemoteDraft(

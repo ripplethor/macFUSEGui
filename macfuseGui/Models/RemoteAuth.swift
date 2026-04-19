@@ -10,9 +10,11 @@ import Foundation
 
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
-// Case order determines display order in SwiftUI pickers; keep privateKey first.
+// Case order determines display order in SwiftUI pickers; keep explicit key-file
+// auth first, then system OpenSSH auth, then password.
 enum RemoteAuth: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
     case privateKey
+    case systemSSH
     case password
 
     // Stable identifier used by SwiftUI Picker/ForEach.
@@ -22,6 +24,8 @@ enum RemoteAuth: String, Codable, CaseIterable, Hashable, Identifiable, Sendable
         switch self {
         case .privateKey:
             return L10n.tr("SSH Private Key")
+        case .systemSSH:
+            return L10n.tr("System SSH")
         case .password:
             return L10n.tr("Password")
         }
@@ -31,6 +35,8 @@ enum RemoteAuth: String, Codable, CaseIterable, Hashable, Identifiable, Sendable
         switch self {
         case .privateKey:
             return "key.fill"
+        case .systemSSH:
+            return "terminal"
         case .password:
             return "lock.fill"
         }

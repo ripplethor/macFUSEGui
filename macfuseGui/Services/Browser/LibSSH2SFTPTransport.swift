@@ -263,6 +263,10 @@ final class LibSSH2SFTPTransport: BrowserTransport, @unchecked Sendable {
                 throw AppError.remoteBrowserError(L10n.tr("Private key path is required for key-based remote browsing."))
             }
             return (nil, key)
+        case .systemSSH:
+            throw AppError.remoteBrowserError(
+                L10n.tr("Remote browser does not support System SSH auth yet. Use Password or SSH Private Key for browsing.")
+            )
         }
     }
 
