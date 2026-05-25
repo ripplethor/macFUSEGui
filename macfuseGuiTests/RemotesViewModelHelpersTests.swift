@@ -6,6 +6,7 @@
 // Concurrency: Uses a Swift actor for data-race safety; actor methods execute in an isolated concurrency domain.
 // Maintenance tip: Start reading top-to-bottom once, then follow one user action end-to-end through call sites.
 
+import ServiceManagement
 import XCTest
 @testable import macfuseGui
 
@@ -409,6 +410,133 @@ final class RemotesViewModelHelpersTests: XCTestCase {
             autoConnectOnLaunch: autoConnect
         )
     }
+
+    /// Regression guard: a second wake event must cancel the prior preflight task instead
+    /// of double-spawning cleanup work and prematurely flipping `wakePreflightInProgress`
+    /// while the original task is still running.
+    @MainActor
+    func testRepeatedSystemWakeCancelsPriorPreflightTask() async {
+        let viewModel = makeWakeTestViewModel()
+
+        viewModel.handleSystemDidWake()
+        let firstTask = viewModel.wakePreflightTask
+        XCTAssertNotNil(firstTask, "First wake call must store a preflight task.")
+
+        viewModel.handleSystemDidWake()
+        let secondTask = viewModel.wakePreflightTask
+        XCTAssertNotNil(secondTask, "Second wake call must store a replacement task.")
+
+        XCTAssertTrue(
+            firstTask?.isCancelled ?? false,
+            "Repeated wake must cancel the prior preflight task so the gate does not flip prematurely."
+        )
+
+        await secondTask?.value
+        XCTAssertNil(
+            viewModel.wakePreflightTask,
+            "Completed preflight task must clear the stored handle when it is still current."
+        )
+    }
+
+    @MainActor
+    private func makeWakeTestViewModel() -> RemotesViewModel {
+        let diagnostics = DiagnosticsService()
+        let parser = MountStateParser()
+        let runner = WakeTestRunner()
+        let mountManager = MountManager(
+            runner: runner,
+            dependencyChecker: WakeTestReadyDependencyChecker(),
+            askpassHelper: AskpassHelper(),
+            unmountService: UnmountService(
+                runner: runner,
+                diagnostics: diagnostics,
+                mountStateParser: parser
+            ),
+            mountStateParser: parser,
+            diagnostics: diagnostics,
+            commandBuilder: MountCommandBuilder(redactionService: RedactionService())
+        )
+        let browserService = RemoteDirectoryBrowserService(
+            manager: RemoteBrowserSessionManager(
+                transport: WakeTestBrowserTransport(),
+                diagnostics: diagnostics
+            ),
+            diagnostics: diagnostics
+        )
+        let launchService = LaunchAtLoginService(
+            appService: WakeTestStubLaunchAtLoginAppService(),
+            runner: runner
+        )
+        return RemotesViewModel(
+            remoteStore: WakeTestInMemoryRemoteStore(),
+            keychainService: WakeTestStubKeychainService(),
+            validationService: ValidationService(),
+            dependencyChecker: DependencyChecker(),
+            mountManager: mountManager,
+            remoteDirectoryBrowserService: browserService,
+            diagnostics: diagnostics,
+            launchAtLoginService: launchService
+        )
+    }
+}
+
+private actor WakeTestRunner: ProcessRunning {
+    func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        timeout: TimeInterval,
+        standardInput: String?
+    ) async throws -> ProcessResult {
+        ProcessResult(
+            executable: executable,
+            arguments: arguments,
+            stdout: "",
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+            duration: 0.001
+        )
+    }
+}
+
+private struct WakeTestReadyDependencyChecker: DependencyChecking {
+    func check(sshfsOverride: String?) -> DependencyStatus {
+        DependencyStatus(
+            isReady: true,
+            sshfsPath: sshfsOverride ?? "/usr/bin/sshfs",
+            issues: []
+        )
+    }
+}
+
+@MainActor
+private final class WakeTestInMemoryRemoteStore: RemoteStore {
+    let storageURL = URL(fileURLWithPath: "/tmp/macfusegui-helpers-tests/remotes.json")
+    func load() throws -> [RemoteConfig] { [] }
+    func save(_ remotes: [RemoteConfig]) throws {}
+    func upsert(_ remote: RemoteConfig) throws {}
+    func delete(id: UUID) throws {}
+}
+
+private struct WakeTestStubKeychainService: KeychainServiceProtocol {
+    func savePassword(remoteID: String, password: String) throws {}
+    func readPassword(remoteID: String, allowUserInteraction: Bool) throws -> String? { nil }
+    func deletePassword(remoteID: String) throws {}
+}
+
+@MainActor
+private final class WakeTestStubLaunchAtLoginAppService: LaunchAtLoginAppService {
+    var status: SMAppService.Status { .notRegistered }
+    func register() throws {}
+    func unregister() async throws {}
+}
+
+private struct WakeTestBrowserTransport: BrowserTransport {
+    func listDirectories(remote: RemoteConfig, path: String, password: String?) async throws -> BrowserTransportListResult {
+        BrowserTransportListResult(resolvedPath: path, entries: [], latencyMs: 1, reopenedSession: false)
+    }
+    func ping(remote: RemoteConfig, path: String, password: String?) async throws {}
 }
 
 /// Beginner note: This type groups related state and behavior for one part of the app.

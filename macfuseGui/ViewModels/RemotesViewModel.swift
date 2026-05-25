@@ -228,6 +228,9 @@ final class RemotesViewModel: ObservableObject {
     private var lastSleepSkipLogAt: Date = .distantPast
     private var lastWakePreflightSkipLogAt: Date = .distantPast
     private var recoveryBurstTask: Task<Void, Never>?
+    // Visible to tests so a regression check can verify that repeated wake events
+    // cancel the prior preflight task instead of double-spawning cleanup work.
+    internal var wakePreflightTask: Task<Void, Never>?
     private var wakePreflightInProgress = false
     private var workspaceObservers: [NSObjectProtocol] = []
     private var networkMonitor: NWPathMonitor?
@@ -315,6 +318,8 @@ final class RemotesViewModel: ObservableObject {
         reconnectTasks.removeAll()
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
+        wakePreflightTask?.cancel()
+        wakePreflightTask = nil
         networkRestoreDebounceTask?.cancel()
         networkRestoreDebounceTask = nil
         networkLossCleanupTask?.cancel()
@@ -1801,6 +1806,8 @@ final class RemotesViewModel: ObservableObject {
         systemSleeping = true
         wakePreflightInProgress = false
         wakeAnimationUntil = nil
+        wakePreflightTask?.cancel()
+        wakePreflightTask = nil
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
         networkLossCleanupTask?.cancel()
@@ -1819,23 +1826,39 @@ final class RemotesViewModel: ObservableObject {
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
-    private func handleSystemDidWake() {
+    /// Internal access so tests can drive the wake handler directly and verify dedup.
+    internal func handleSystemDidWake() {
         systemSleeping = false
         wakePreflightInProgress = true
         wakeAnimationUntil = Date().addingTimeInterval(20)
         beginRecoveryIndicator(reason: "wake")
         refreshRecoveryIndicator()
         diagnostics.append(level: .info, category: "recovery", message: "System woke up. Running staged recovery passes.")
-        Task { @MainActor [weak self] in
+
+        // Repeated wake events (rapid sleep/wake cycle or duplicate delivery) must not
+        // double-spawn preflight cleanup. The previous task is cancelled before the
+        // replacement is stored, and the defer only clears bookkeeping when the
+        // completing task is still the current one.
+        wakePreflightTask?.cancel()
+        wakePreflightTask = Task { @MainActor [weak self] in
             guard let self else {
                 return
             }
+            if Task.isCancelled {
+                return
+            }
             defer {
-                self.wakePreflightInProgress = false
-                self.lastWakePreflightSkipLogAt = .distantPast
-                self.refreshRecoveryIndicator()
+                if !Task.isCancelled {
+                    self.wakePreflightTask = nil
+                    self.wakePreflightInProgress = false
+                    self.lastWakePreflightSkipLogAt = .distantPast
+                    self.refreshRecoveryIndicator()
+                }
             }
             await self.performWakePreflightCleanup()
+            guard !Task.isCancelled else {
+                return
+            }
             self.scheduleRecoveryBurst(trigger: "wake", delaySeconds: Self.recoveryBurstDelays(for: "wake"))
         }
     }
@@ -3452,6 +3475,8 @@ final class RemotesViewModel: ObservableObject {
 
         recoveryBurstTask?.cancel()
         recoveryBurstTask = nil
+        wakePreflightTask?.cancel()
+        wakePreflightTask = nil
         networkRestoreDebounceTask?.cancel()
         networkRestoreDebounceTask = nil
         networkLossCleanupTask?.cancel()
