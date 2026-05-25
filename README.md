@@ -12,6 +12,7 @@
 ## Key Features
 
 - Multiple remotes with per-remote connect/disconnect.
+- Three auth modes: `SSH Private Key`, `System SSH`, and `Password`.
 - Startup duplicate-instance guard (singleton lock + running-app check) to avoid duplicate menu bar icons.
 - Secure persistence:
   - Non-sensitive config in JSON.
@@ -36,8 +37,20 @@
 
 ```bash
 brew install --cask macfuse
-brew install gromgit/fuse/sshfs-mac
+brew install sshfs-mac
 ```
+
+## Authentication Modes
+
+macfuseGui currently supports three SSH auth modes:
+
+- `SSH Private Key`: requires an absolute private key path and appends `IdentityFile=...` to the `sshfs` invocation.
+- `System SSH`: uses your normal OpenSSH setup without appending an explicit key path. Use this for SSH agent, macOS agent-backed keys, `~/.ssh/config` hosts, and Tailscale SSH-style setups.
+- `Password`: requires a stored password and pins the mount/test path to password or keyboard-interactive auth so a wrong password cannot silently succeed through key, agent, keychain, or other SSH fallback methods.
+
+Notes:
+- Finder mounts and `Test Connection` support all three auth modes.
+- The built-in remote browser currently supports only `Password` and `SSH Private Key` because it uses libssh2. `System SSH` still works for Finder mounts and `Test Connection`.
 
 ## Install via Homebrew (App)
 
@@ -201,7 +214,7 @@ xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug
 
 ```bash
 ARCH_OVERRIDE=arm64 ./scripts/build.sh
-scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO
+python3 scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO
 ```
 
 ## VS Code
@@ -232,7 +245,9 @@ Debug launch:
 
 - All external command execution uses `Process` with argument arrays.
 - No shell interpolation for user input.
-- Password mode uses temporary `SSH_ASKPASS` helper (`0700`) and ephemeral env vars.
+- Password mode uses a temporary `SSH_ASKPASS` helper script (`0700` in a per-mount tempdir) plus a uniquely-named env var (`MACFUSEGUI_ASKPASS_PASSWORD_<uuid>`) that the script reads. The script and tempdir are deleted as soon as the connect call returns, but the env var is inherited by `sshfs`/`ssh` at fork/exec and therefore remains in those processes' environment for the entire lifetime of the mount — visible to other processes running as the same user (e.g. via `ps eww` on Linux, or `KERN_PROCARGS2`/`sysctl` on macOS). This is an inherent trade-off of the `SSH_ASKPASS` protocol; the password is never on the command line or in any persistent file.
+- `System SSH` mode intentionally does not append an explicit `IdentityFile`; it relies on normal OpenSSH config and agent resolution.
+- Password auth pinning is injected through `ssh_command=/usr/bin/ssh -o ...` because current Homebrew macOS `sshfs` builds reject raw `PubkeyAuthentication=...`-style mount options at the FUSE layer.
 - Passwords are never stored in JSON or logs.
 - `KeychainService.readPassword` trims leading/trailing whitespace on read — prevents silent auth failures from clipboard-pasted trailing newlines without altering the stored credential.
 - IPv6 host addresses are automatically bracketed (`[::1]`) in sshfs arguments; bare IPv6 input is also rejected at the validation layer.
@@ -243,6 +258,10 @@ Debug launch:
 Browser internals are session-based (`openSession` / `listDirectories` / `health` / `closeSession`) with per-session health and sticky-cache behavior.
 
 Current transport implementation uses native libssh2 SFTP through a C bridge (`LibSSH2Bridge.c/.h`) behind an internal transport abstraction.
+
+Auth support:
+- `Password` and `SSH Private Key` are supported in the browser today.
+- `System SSH` is not supported in the browser yet; use Finder mounts or `Test Connection` for that mode.
 
 Recovery contract:
 - Keepalive runs every 12s only while the browser session is idle.
@@ -257,7 +276,7 @@ Recovery contract:
 
 ```bash
 brew install --cask macfuse
-brew install gromgit/fuse/sshfs-mac
+brew install sshfs-mac
 ```
 
 ### xcodebuild first-launch issues
