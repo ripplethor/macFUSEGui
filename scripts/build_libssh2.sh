@@ -23,6 +23,13 @@ OPENSSL_SAFE_MINIMIZE_FLAGS=(
 LIBSSH2_URL="https://www.libssh2.org/download/libssh2-${LIBSSH2_VERSION}.tar.gz"
 OPENSSL_URL="https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
 
+# Pinned SHA-256 checksums for the source tarballs (supply-chain integrity).
+# These are the upstream-published hashes for the default versions above and MUST
+# be updated whenever LIBSSH2_VERSION / OPENSSL_VERSION change. They can be
+# overridden via the environment when intentionally building a different version.
+LIBSSH2_SHA256="${LIBSSH2_SHA256:-d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7}"
+OPENSSL_SHA256="${OPENSSL_SHA256:-dfdd77e4ea1b57ff3a6dbde6b0bdc3f31db5ac99e7fdd4eaf9e1fbb6ec2db8ce}"
+
 SOURCE_ROOT="$ROOT_DIR/third_party/src"
 LIBSSH2_TARBALL="$SOURCE_ROOT/libssh2-${LIBSSH2_VERSION}.tar.gz"
 OPENSSL_TARBALL="$SOURCE_ROOT/openssl-${OPENSSL_VERSION}.tar.gz"
@@ -83,14 +90,35 @@ have_cached_outputs() {
     [[ -d "$OPENSSL_OUTPUT_INCLUDE" ]]
 }
 
+verify_checksum() {
+  local file="$1"
+  local expected="$2"
+  local actual
+  actual="$(shasum -a 256 "$file" | awk '{print $1}')"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Checksum verification FAILED for $(basename "$file")." >&2
+    echo "  expected: $expected" >&2
+    echo "  actual:   $actual" >&2
+    echo "Refusing to build with an unverified source tarball." >&2
+    # Drop the bad file so a later run can re-fetch a clean copy.
+    rm -f "$file"
+    exit 1
+  fi
+}
+
 download_if_missing() {
   local tarball="$1"
   local url="$2"
+  local expected_sha="$3"
   if [[ -f "$tarball" ]]; then
+    # Verify the cached tarball too: it may have been truncated or tampered with
+    # since a previous run.
+    verify_checksum "$tarball" "$expected_sha"
     return
   fi
   echo "Downloading $(basename "$tarball")..."
   curl -fsSL "$url" -o "$tarball"
+  verify_checksum "$tarball" "$expected_sha"
 }
 
 openssl_target_for_arch() {
@@ -262,8 +290,8 @@ if have_cached_outputs; then
   exit 0
 fi
 
-download_if_missing "$OPENSSL_TARBALL" "$OPENSSL_URL"
-download_if_missing "$LIBSSH2_TARBALL" "$LIBSSH2_URL"
+download_if_missing "$OPENSSL_TARBALL" "$OPENSSL_URL" "$OPENSSL_SHA256"
+download_if_missing "$LIBSSH2_TARBALL" "$LIBSSH2_URL" "$LIBSSH2_SHA256"
 
 rm -rf "$BUILD_ROOT" "$OPENSSL_OUTPUT_INCLUDE" "$OPENSSL_OUTPUT_LIB" "$LIBSSH2_OUTPUT_INCLUDE" "$LIBSSH2_OUTPUT_LIB"
 mkdir -p "$BUILD_ROOT" "$OPENSSL_OUTPUT_INCLUDE" "$OPENSSL_OUTPUT_LIB" "$LIBSSH2_OUTPUT_INCLUDE" "$LIBSSH2_OUTPUT_LIB"
