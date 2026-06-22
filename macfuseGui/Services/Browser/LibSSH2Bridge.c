@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -814,7 +815,192 @@ static int macfusegui_sftp_stat_with_deadline(
 }
 
 int32_t macfusegui_libssh2_bridge_version(void) {
-    return 2;
+    /* Bumped to 3: sessions now perform SSH host-key verification before auth. */
+    return 3;
+}
+
+/* Map a libssh2 hostkey type to the matching known-hosts key-type mask.
+   Returns 0 for unknown/unsupported types so callers can fail closed. */
+static int macfusegui_knownhost_key_mask(int hostkey_type) {
+    switch (hostkey_type) {
+        case LIBSSH2_HOSTKEY_TYPE_RSA:       return LIBSSH2_KNOWNHOST_KEY_SSHRSA;
+        case LIBSSH2_HOSTKEY_TYPE_DSS:       return LIBSSH2_KNOWNHOST_KEY_SSHDSS;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_256: return LIBSSH2_KNOWNHOST_KEY_ECDSA_256;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_384: return LIBSSH2_KNOWNHOST_KEY_ECDSA_384;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_521: return LIBSSH2_KNOWNHOST_KEY_ECDSA_521;
+        case LIBSSH2_HOSTKEY_TYPE_ED25519:   return LIBSSH2_KNOWNHOST_KEY_ED25519;
+        default:                             return 0;
+    }
+}
+
+/* Render the server's SHA-256 host-key fingerprint as colon-separated hex.
+   Caller owns the returned buffer (free with free()); returns NULL on failure. */
+static char *macfusegui_hostkey_fingerprint(LIBSSH2_SESSION *session) {
+    const char *hash = libssh2_hostkey_hash(session, LIBSSH2_HOSTKEY_HASH_SHA256);
+    if (hash == NULL) {
+        return NULL;
+    }
+
+    /* 32 bytes -> 64 hex chars + 31 separators + NUL = 96. */
+    char *out = (char *)malloc(32 * 3);
+    if (out == NULL) {
+        return NULL;
+    }
+
+    static const char hexdigits[] = "0123456789abcdef";
+    size_t pos = 0;
+    for (int i = 0; i < 32; i += 1) {
+        unsigned char byte = (unsigned char)hash[i];
+        if (i > 0) {
+            out[pos++] = ':';
+        }
+        out[pos++] = hexdigits[(byte >> 4) & 0x0F];
+        out[pos++] = hexdigits[byte & 0x0F];
+    }
+    out[pos] = '\0';
+    return out;
+}
+
+/* Best-effort creation of ~/.ssh (0700) so first-use host keys can be persisted. */
+static void macfusegui_ensure_ssh_dir(const char *home) {
+    char dir[PATH_MAX];
+    int written = snprintf(dir, sizeof(dir), "%s/.ssh", home);
+    if (written < 0 || (size_t)written >= sizeof(dir)) {
+        return;
+    }
+    (void)mkdir(dir, 0700);
+}
+
+/* Verify the server's host key against ~/.ssh/known_hosts before authenticating.
+   Policy mirrors OpenSSH `accept-new` / the sshfs mount path:
+     - known + matching key   -> trust.
+     - known but changed key  -> refuse (possible MITM).
+     - unknown host           -> trust on first use and persist the key.
+   Fails closed when the key cannot be read or known_hosts cannot be parsed.
+   Returns 0 when the host is trusted; non-zero (with *out_error_message set)
+   otherwise. */
+static int macfusegui_verify_host_key(
+    LIBSSH2_SESSION *session,
+    const char *host,
+    int32_t port,
+    char **out_error_message
+) {
+    size_t hostkey_len = 0;
+    int hostkey_type = 0;
+    const char *hostkey = libssh2_session_hostkey(session, &hostkey_len, &hostkey_type);
+    if (hostkey == NULL || hostkey_len == 0) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: the server did not present a host key.");
+        return -1;
+    }
+
+    int key_mask = macfusegui_knownhost_key_mask(hostkey_type);
+    if (key_mask == 0) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: unsupported remote host key type.");
+        return -1;
+    }
+
+    const char *home = getenv("HOME");
+    if (home == NULL || home[0] == '\0') {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: HOME is not set, so ~/.ssh/known_hosts cannot be checked.");
+        return -1;
+    }
+
+    char known_hosts_path[PATH_MAX];
+    int path_written = snprintf(known_hosts_path, sizeof(known_hosts_path), "%s/.ssh/known_hosts", home);
+    if (path_written < 0 || (size_t)path_written >= sizeof(known_hosts_path)) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not resolve the ~/.ssh/known_hosts path.");
+        return -1;
+    }
+
+    LIBSSH2_KNOWNHOSTS *known_hosts = libssh2_knownhost_init(session);
+    if (known_hosts == NULL) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not initialize the known-hosts store.");
+        return -1;
+    }
+
+    int read_result = libssh2_knownhost_readfile(known_hosts, known_hosts_path, LIBSSH2_KNOWNHOST_FILE_OPENSSH);
+    /* A missing file (LIBSSH2_ERROR_FILE) just means no known hosts yet, which is
+       fine. Any other read/parse error means the file exists but is unusable, so
+       fail closed rather than silently trusting an unverified key. */
+    if (read_result < 0 && read_result != LIBSSH2_ERROR_FILE) {
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: ~/.ssh/known_hosts exists but could not be read.");
+        return -1;
+    }
+
+    int typemask = LIBSSH2_KNOWNHOST_TYPE_PLAIN | LIBSSH2_KNOWNHOST_KEYENC_RAW | key_mask;
+    struct libssh2_knownhost *match = NULL;
+    int check = libssh2_knownhost_checkp(
+        known_hosts, host, (int)port, hostkey, hostkey_len, typemask, &match);
+
+    if (check == LIBSSH2_KNOWNHOST_CHECK_MATCH) {
+        libssh2_knownhost_free(known_hosts);
+        return 0;
+    }
+
+    if (check == LIBSSH2_KNOWNHOST_CHECK_MISMATCH) {
+        char *fingerprint = macfusegui_hostkey_fingerprint(session);
+        char message[768];
+        snprintf(message, sizeof(message),
+            "Host key verification failed: the key offered by %s:%d does NOT match the "
+            "trusted key in ~/.ssh/known_hosts. This may indicate a man-in-the-middle "
+            "attack, so the connection was refused. Offered key SHA256 fingerprint: %s. "
+            "If the host key changed legitimately, remove the old entry from "
+            "~/.ssh/known_hosts and reconnect.",
+            host, (int)port, fingerprint != NULL ? fingerprint : "unavailable");
+        if (fingerprint != NULL) {
+            free(fingerprint);
+        }
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message, message);
+        return -1;
+    }
+
+    if (check != LIBSSH2_KNOWNHOST_CHECK_NOTFOUND) {
+        /* LIBSSH2_KNOWNHOST_CHECK_FAILURE or any unexpected value. */
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not check the remote host key.");
+        return -1;
+    }
+
+    /* Unknown host: trust on first use. Record and persist the key so a later key
+       change is detected as a mismatch. Non-standard ports use the OpenSSH
+       "[host]:port" host identifier so entries interoperate with the sshfs path. */
+    char hostid[NI_MAXHOST + 16];
+    if (port == 22) {
+        snprintf(hostid, sizeof(hostid), "%s", host);
+    } else {
+        snprintf(hostid, sizeof(hostid), "[%s]:%d", host, (int)port);
+    }
+
+    int add_result = libssh2_knownhost_addc(
+        known_hosts,
+        hostid,
+        NULL,
+        hostkey,
+        hostkey_len,
+        NULL,
+        0,
+        typemask,
+        NULL);
+
+    if (add_result == 0) {
+        macfusegui_ensure_ssh_dir(home);
+        /* Best effort: if persistence fails (e.g. read-only HOME) we still proceed.
+           We have confirmed this is not a *changed* key for an already-trusted
+           host; the connection is no worse than OpenSSH `accept-new`. */
+        (void)libssh2_knownhost_writefile(known_hosts, known_hosts_path, LIBSSH2_KNOWNHOST_FILE_OPENSSH);
+    }
+
+    libssh2_knownhost_free(known_hosts);
+    return 0;
 }
 
 int32_t macfusegui_libssh2_open_session(
@@ -884,6 +1070,15 @@ int32_t macfusegui_libssh2_open_session(
     }
     if (handshake_result != 0) {
         macfusegui_set_out_session_error(out_error_message, session, "SSH handshake failed.");
+        goto cleanup_error;
+    }
+
+    /* Verify the server identity against ~/.ssh/known_hosts BEFORE sending any
+       credentials. Without this an active network attacker could impersonate the
+       server and capture the password during keyboard-interactive/password auth. */
+    int host_key_status = macfusegui_verify_host_key(session, host, port, out_error_message);
+    if (host_key_status != 0) {
+        /* out_error_message already holds a specific reason. */
         goto cleanup_error;
     }
 
