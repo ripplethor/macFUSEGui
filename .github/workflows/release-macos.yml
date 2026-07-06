@@ -165,4 +165,8 @@ jobs:
             export RELEASE_VERSION="${{ inputs.release_version }}"
           fi
 
-          ./scripts/release.sh "${release_args[@]}"
+          if ((${#release_args[@]})); then
+            ./scripts/release.sh "${release_args[@]}"
+          else
+            ./scripts/release.sh
+          fi
