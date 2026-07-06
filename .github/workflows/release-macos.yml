@@ -1,0 +1,168 @@
+name: Release macOS App
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "ARCH_OVERRIDE passed to scripts/release.sh"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - arm64
+          - x86_64
+          - both
+          - universal
+      configuration:
+        description: "Xcode configuration"
+        required: true
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+      release_version:
+        description: "Optional X.Y.Z release version. Blank auto-bumps patch."
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Pass --dry-run to scripts/release.sh"
+        required: true
+        default: false
+        type: boolean
+      skip_build:
+        description: "Set SKIP_BUILD=1"
+        required: true
+        default: false
+        type: boolean
+      code_signing_allowed:
+        description: "CODE_SIGNING_ALLOWED passed to build/release scripts"
+        required: true
+        default: "NO"
+        type: choice
+        options:
+          - "NO"
+          - "YES"
+      update_homebrew_cask:
+        description: "Set UPDATE_HOMEBREW_CASK"
+        required: true
+        default: true
+        type: boolean
+      strip_dmg_payload:
+        description: "Set STRIP_DMG_PAYLOAD"
+        required: true
+        default: false
+        type: boolean
+      dmg_zlib_level:
+        description: "Set DMG_ZLIB_LEVEL"
+        required: true
+        default: "9"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+          - "6"
+          - "7"
+          - "8"
+          - "9"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Run scripts/release.sh
+    runs-on: macos-26
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure release git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Show macOS build host
+        run: |
+          sw_vers
+          uname -m
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Ensure GitHub CLI is available
+        run: |
+          if command -v gh >/dev/null 2>&1; then
+            gh --version
+            exit 0
+          fi
+
+          if command -v brew >/dev/null 2>&1; then
+            brew install gh
+            gh --version
+            exit 0
+          fi
+
+          echo "GitHub CLI is required by scripts/release.sh and is not installed." >&2
+          exit 1
+
+      - name: Install Rosetta for Intel build support
+        run: |
+          if [[ "$(uname -m)" == "arm64" ]]; then
+            sudo softwareupdate --install-rosetta --agree-to-license || true
+          fi
+
+      - name: Run existing release script
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_args=()
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            release_args+=(--dry-run)
+          fi
+
+          export ARCH_OVERRIDE="${{ inputs.arch }}"
+          export CONFIGURATION="${{ inputs.configuration }}"
+          export CODE_SIGNING_ALLOWED="${{ inputs.code_signing_allowed }}"
+          export DMG_ZLIB_LEVEL="${{ inputs.dmg_zlib_level }}"
+
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            export SKIP_BUILD=1
+          else
+            export SKIP_BUILD=0
+          fi
+
+          if [[ "${{ inputs.update_homebrew_cask }}" == "true" ]]; then
+            export UPDATE_HOMEBREW_CASK=1
+          else
+            export UPDATE_HOMEBREW_CASK=0
+          fi
+
+          if [[ "${{ inputs.strip_dmg_payload }}" == "true" ]]; then
+            export STRIP_DMG_PAYLOAD=1
+          else
+            export STRIP_DMG_PAYLOAD=0
+          fi
+
+          if [[ -n "${{ inputs.release_version }}" ]]; then
+            export RELEASE_VERSION="${{ inputs.release_version }}"
+          fi
+
+          ./scripts/release.sh "${release_args[@]}"
