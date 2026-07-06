@@ -53,6 +53,17 @@ final class ValidationService {
             errors.append(L10n.tr("Username cannot contain whitespace characters."))
         }
 
+        if draft.proxyJumpEnabled {
+            let proxyJump = draft.proxyJump.trimmingCharacters(in: .whitespacesAndNewlines)
+            if proxyJump.isEmpty {
+                errors.append(L10n.tr("Choose or enter a jump host, or turn off the jump host option."))
+            } else if containsUnsafeControlCharacters(proxyJump) {
+                errors.append(L10n.tr("Jump host contains invalid control characters."))
+            } else if proxyJump.rangeOfCharacter(from: .whitespaces) != nil {
+                errors.append(L10n.tr("Jump host cannot contain spaces. Use user@host[:port] or a comma-separated chain."))
+            }
+        }
+
         let remoteDirectory = draft.remoteDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         if !isSupportedRemotePath(remoteDirectory) {
             errors.append(L10n.tr("Remote directory must be absolute (for example /home/user or C:/Users/User)."))

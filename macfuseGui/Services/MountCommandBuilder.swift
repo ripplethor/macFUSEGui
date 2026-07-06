@@ -78,9 +78,7 @@ final class MountCommandBuilder {
             "reconnect",
             "ServerAliveInterval=15",
             "ServerAliveCountMax=3",
-            "defer_permissions",
-            "noappledouble",
-            "noapplexattr"
+            "defer_permissions"
         ]
 
         if remote.disableLocalCaches {
@@ -111,6 +109,10 @@ final class MountCommandBuilder {
             "volname=\(escapedOptionValue(volumeName(for: remote, normalizedRemotePath: normalizedRemotePath)))"
         ])
 
+        let proxyJump = remote.proxyJumpEnabled
+            ? (remote.proxyJump?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+            : ""
+
         switch remote.authMode {
         case .privateKey:
             if let key = remote.privateKeyPath,
@@ -118,10 +120,15 @@ final class MountCommandBuilder {
                 let normalizedKeyPath = LocalPathNormalizer.normalize(key)
                 options.append("IdentityFile=\(escapedOptionValue(normalizedKeyPath))")
             }
+            if !proxyJump.isEmpty {
+                options.append("ProxyJump=\(escapedOptionValue(proxyJump))")
+            }
         case .password:
-            options.append("ssh_command=\(escapedOptionValue(passwordPinnedSSHCommand()))")
+            options.append("ssh_command=\(escapedOptionValue(passwordPinnedSSHCommand(proxyJump: proxyJump)))")
         case .systemSSH:
-            break
+            if !proxyJump.isEmpty {
+                options.append("ProxyJump=\(escapedOptionValue(proxyJump))")
+            }
         }
 
         var args: [String] = ["-p", "\(remote.port)"]
@@ -130,7 +137,8 @@ final class MountCommandBuilder {
             args.append(option)
         }
 
-        let source = "\(remote.username)@\(sshHostArgument(remote.host)):\(normalizedRemotePath)"
+        let sourcePath = normalizedRemotePath.hasSuffix("/") ? normalizedRemotePath : "\(normalizedRemotePath)/"
+        let source = "\(remote.username)@\(sshHostArgument(remote.host)):\(sourcePath)"
         args.append(source)
         args.append(remote.localMountPoint)
 
@@ -265,15 +273,23 @@ final class MountCommandBuilder {
     /// sshfs build rejects several raw ssh_config-style `-o SSHOPT=VAL` options
     /// at the FUSE parser layer. Pinning auth inside `ssh_command=...` avoids
     /// agent/public-key fallback while remaining compatible with this binary.
-    private func passwordPinnedSSHCommand() -> String {
-        [
+    private func passwordPinnedSSHCommand(proxyJump: String = "") -> String {
+        var parts = [
             "/usr/bin/ssh",
             "-o", "PubkeyAuthentication=no",
             "-o", "KbdInteractiveAuthentication=yes",
             "-o", "PasswordAuthentication=yes",
             "-o", "PreferredAuthentications=keyboard-interactive,password",
             "-o", "NumberOfPasswordPrompts=1"
-        ].joined(separator: " ")
+        ]
+
+        let trimmedProxyJump = proxyJump.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedProxyJump.isEmpty {
+            parts.append("-o")
+            parts.append("ProxyJump=\(trimmedProxyJump)")
+        }
+
+        return parts.joined(separator: " ")
     }
 }
 

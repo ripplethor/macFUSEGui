@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
@@ -814,7 +815,210 @@ static int macfusegui_sftp_stat_with_deadline(
 }
 
 int32_t macfusegui_libssh2_bridge_version(void) {
-    return 2;
+    return 3;
+}
+
+static int macfusegui_knownhost_key_mask(int hostkey_type) {
+    switch (hostkey_type) {
+        case LIBSSH2_HOSTKEY_TYPE_RSA:
+            return LIBSSH2_KNOWNHOST_KEY_SSHRSA;
+        case LIBSSH2_HOSTKEY_TYPE_DSS:
+            return LIBSSH2_KNOWNHOST_KEY_SSHDSS;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_256:
+            return LIBSSH2_KNOWNHOST_KEY_ECDSA_256;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_384:
+            return LIBSSH2_KNOWNHOST_KEY_ECDSA_384;
+        case LIBSSH2_HOSTKEY_TYPE_ECDSA_521:
+            return LIBSSH2_KNOWNHOST_KEY_ECDSA_521;
+        case LIBSSH2_HOSTKEY_TYPE_ED25519:
+            return LIBSSH2_KNOWNHOST_KEY_ED25519;
+        default:
+            return 0;
+    }
+}
+
+static char *macfusegui_hostkey_fingerprint(LIBSSH2_SESSION *session) {
+    const char *hash = libssh2_hostkey_hash(session, LIBSSH2_HOSTKEY_HASH_SHA256);
+    if (hash == NULL) {
+        return NULL;
+    }
+
+    char *out = (char *)malloc(32 * 3);
+    if (out == NULL) {
+        return NULL;
+    }
+
+    static const char hexdigits[] = "0123456789abcdef";
+    size_t pos = 0;
+    for (int i = 0; i < 32; i += 1) {
+        unsigned char byte = (unsigned char)hash[i];
+        if (i > 0) {
+            out[pos++] = ':';
+        }
+        out[pos++] = hexdigits[(byte >> 4) & 0x0F];
+        out[pos++] = hexdigits[byte & 0x0F];
+    }
+    out[pos] = '\0';
+    return out;
+}
+
+static int macfusegui_ensure_ssh_dir(const char *home, char **out_error_message) {
+    char dir[PATH_MAX];
+    int written = snprintf(dir, sizeof(dir), "%s/.ssh", home);
+    if (written < 0 || (size_t)written >= sizeof(dir)) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not resolve the ~/.ssh directory.");
+        return -1;
+    }
+
+    if (mkdir(dir, 0700) == 0) {
+        return 0;
+    }
+
+    if (errno == EEXIST) {
+        struct stat statbuf;
+        if (stat(dir, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) {
+            return 0;
+        }
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: ~/.ssh exists but is not a directory.");
+        return -1;
+    }
+
+    macfusegui_set_out_error(out_error_message,
+        "Host key verification failed: could not create ~/.ssh to persist the trusted host key.");
+    return -1;
+}
+
+static int macfusegui_verify_host_key(
+    LIBSSH2_SESSION *session,
+    const char *host,
+    int32_t port,
+    char **out_error_message
+) {
+    size_t hostkey_len = 0;
+    int hostkey_type = 0;
+    const char *hostkey = libssh2_session_hostkey(session, &hostkey_len, &hostkey_type);
+    if (hostkey == NULL || hostkey_len == 0) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: the server did not present a host key.");
+        return -1;
+    }
+
+    int key_mask = macfusegui_knownhost_key_mask(hostkey_type);
+    if (key_mask == 0) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: unsupported remote host key type.");
+        return -1;
+    }
+
+    const char *home = getenv("HOME");
+    if (home == NULL || home[0] == '\0') {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: HOME is not set, so ~/.ssh/known_hosts cannot be checked.");
+        return -1;
+    }
+
+    char known_hosts_path[PATH_MAX];
+    int path_written = snprintf(known_hosts_path, sizeof(known_hosts_path), "%s/.ssh/known_hosts", home);
+    if (path_written < 0 || (size_t)path_written >= sizeof(known_hosts_path)) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not resolve the ~/.ssh/known_hosts path.");
+        return -1;
+    }
+
+    LIBSSH2_KNOWNHOSTS *known_hosts = libssh2_knownhost_init(session);
+    if (known_hosts == NULL) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not initialize the known-hosts store.");
+        return -1;
+    }
+
+    int read_result = libssh2_knownhost_readfile(known_hosts, known_hosts_path, LIBSSH2_KNOWNHOST_FILE_OPENSSH);
+    if (read_result < 0 && read_result != LIBSSH2_ERROR_FILE) {
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: ~/.ssh/known_hosts exists but could not be read.");
+        return -1;
+    }
+
+    int typemask = LIBSSH2_KNOWNHOST_TYPE_PLAIN | LIBSSH2_KNOWNHOST_KEYENC_RAW | key_mask;
+    struct libssh2_knownhost *match = NULL;
+    int check = libssh2_knownhost_checkp(known_hosts, host, (int)port, hostkey, hostkey_len, typemask, &match);
+
+    if (check == LIBSSH2_KNOWNHOST_CHECK_MATCH) {
+        libssh2_knownhost_free(known_hosts);
+        return 0;
+    }
+
+    if (check == LIBSSH2_KNOWNHOST_CHECK_MISMATCH) {
+        char *fingerprint = macfusegui_hostkey_fingerprint(session);
+        char message[768];
+        snprintf(message, sizeof(message),
+            "Host key verification failed: the key offered by %s:%d does not match "
+            "the trusted key in ~/.ssh/known_hosts. This may indicate a man-in-the-middle "
+            "attack. Offered key SHA256 fingerprint: %s. If the host key changed legitimately, "
+            "remove the old known_hosts entry and reconnect.",
+            host, (int)port, fingerprint != NULL ? fingerprint : "unavailable");
+        free(fingerprint);
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message, message);
+        return -1;
+    }
+
+    if (check != LIBSSH2_KNOWNHOST_CHECK_NOTFOUND) {
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not check the remote host key.");
+        return -1;
+    }
+
+    char hostid[NI_MAXHOST + 16];
+    int hostid_written;
+    if (port == 22) {
+        hostid_written = snprintf(hostid, sizeof(hostid), "%s", host);
+    } else {
+        hostid_written = snprintf(hostid, sizeof(hostid), "[%s]:%d", host, (int)port);
+    }
+    if (hostid_written < 0 || (size_t)hostid_written >= sizeof(hostid)) {
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: host identifier is too long for known_hosts.");
+        return -1;
+    }
+
+    int add_result = libssh2_knownhost_addc(
+        known_hosts,
+        hostid,
+        NULL,
+        hostkey,
+        hostkey_len,
+        NULL,
+        0,
+        typemask,
+        NULL);
+
+    if (add_result != 0) {
+        libssh2_knownhost_free(known_hosts);
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not add the first-use key to known_hosts.");
+        return -1;
+    }
+
+    if (macfusegui_ensure_ssh_dir(home, out_error_message) != 0) {
+        libssh2_knownhost_free(known_hosts);
+        return -1;
+    }
+
+    int write_result = libssh2_knownhost_writefile(known_hosts, known_hosts_path, LIBSSH2_KNOWNHOST_FILE_OPENSSH);
+    libssh2_knownhost_free(known_hosts);
+    if (write_result < 0) {
+        macfusegui_set_out_error(out_error_message,
+            "Host key verification failed: could not persist the first-use key to ~/.ssh/known_hosts.");
+        return -1;
+    }
+
+    return 0;
 }
 
 int32_t macfusegui_libssh2_open_session(
@@ -884,6 +1088,10 @@ int32_t macfusegui_libssh2_open_session(
     }
     if (handshake_result != 0) {
         macfusegui_set_out_session_error(out_error_message, session, "SSH handshake failed.");
+        goto cleanup_error;
+    }
+
+    if (macfusegui_verify_host_key(session, host, port, out_error_message) != 0) {
         goto cleanup_error;
     }
 

@@ -304,6 +304,39 @@ struct RemoteEditorView: View {
                 }
             }
             .toggleStyle(.switch)
+
+            proxyJumpSection
+        }
+    }
+
+    private var proxyJumpSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: $viewModel.draft.proxyJumpEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Use jump host (ProxyJump)")
+                        .font(.callout.weight(.semibold))
+                    Text("Route Finder mounts and Test Connection through an OpenSSH bastion.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+
+            if viewModel.draft.proxyJumpEnabled {
+                editorField(
+                    title: "ProxyJump Value",
+                    detail: "OpenSSH format, for example user@bastion.example.com:22. Use commas for multi-hop chains."
+                ) {
+                    TextField("user@bastion.example.com", text: $viewModel.draft.proxyJump)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                infoCallout(
+                    title: "Remote browser unavailable through jump hosts",
+                    message: "ProxyJump is applied to Finder mounts and Test Connection. The built-in browser uses libssh2 and cannot tunnel through the jump host yet.",
+                    tint: .yellow
+                )
+            }
         }
     }
 
@@ -511,12 +544,17 @@ struct RemoteEditorView: View {
     }
 
     private var canBrowseRemote: Bool {
-        hasRemoteBrowserEndpoint && viewModel.draft.authMode != .systemSSH
+        hasRemoteBrowserEndpoint && viewModel.draft.authMode != .systemSSH && !proxyJumpActive
     }
 
     private var hasRemoteBrowserEndpoint: Bool {
         !viewModel.draft.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !viewModel.draft.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var proxyJumpActive: Bool {
+        viewModel.draft.proxyJumpEnabled &&
+        !viewModel.draft.proxyJump.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var authModeTint: Color {
@@ -537,6 +575,9 @@ struct RemoteEditorView: View {
         if viewModel.draft.authMode == .systemSSH {
             return L10n.tr("Browser Unsupported")
         }
+        if proxyJumpActive {
+            return L10n.tr("Browser Unsupported")
+        }
         return L10n.tr("Browser Ready")
     }
 
@@ -544,7 +585,7 @@ struct RemoteEditorView: View {
         if canBrowseRemote {
             return "checkmark.circle.fill"
         }
-        return viewModel.draft.authMode == .systemSSH && hasRemoteBrowserEndpoint
+        return (viewModel.draft.authMode == .systemSSH || proxyJumpActive) && hasRemoteBrowserEndpoint
             ? "exclamationmark.triangle.fill"
             : "exclamationmark.circle.fill"
     }
@@ -553,7 +594,7 @@ struct RemoteEditorView: View {
         if canBrowseRemote {
             return .green
         }
-        return viewModel.draft.authMode == .systemSSH && hasRemoteBrowserEndpoint ? .yellow : .orange
+        return (viewModel.draft.authMode == .systemSSH || proxyJumpActive) && hasRemoteBrowserEndpoint ? .yellow : .orange
     }
 
     private var remoteBrowserUnavailableTitle: String {
@@ -566,6 +607,9 @@ struct RemoteEditorView: View {
     private var remoteBrowserUnavailableMessage: String {
         if !hasRemoteBrowserEndpoint {
             return L10n.tr("Enter both host and username first. The browser opens a real SSH session and needs enough information to authenticate.")
+        }
+        if proxyJumpActive {
+            return L10n.tr("The remote browser uses libssh2 and cannot route through ProxyJump yet. Finder mounts and Test Connection still use the jump host.")
         }
         return L10n.tr("The remote browser uses libssh2 and currently supports Password or SSH Private Key auth only. System SSH mode still works for Finder mounts and Test Connection.")
     }

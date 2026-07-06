@@ -31,7 +31,7 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertEqual(command.executable, "/opt/homebrew/bin/sshfs")
         XCTAssertTrue(command.arguments.contains("-p"))
         XCTAssertTrue(command.arguments.contains("2202"))
-        XCTAssertTrue(command.arguments.contains("dev@example.com:/srv"))
+        XCTAssertTrue(command.arguments.contains("dev@example.com:/srv/"))
         XCTAssertTrue(command.arguments.contains("/Volumes/server"))
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("IdentityFile=/Users/dev/.ssh/id_ed25519"))
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("volname=Server - srv"))
@@ -107,7 +107,7 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertFalse(command.redactedCommand.contains("super-secret"))
         XCTAssertTrue(command.redactedCommand.contains("<redacted>") || !command.redactedCommand.contains("super-secret"))
         XCTAssertTrue(command.redactedCommand.contains("ServerAliveInterval=15"))
-        XCTAssertTrue(command.redactedCommand.contains("dev@example.com:/srv"))
+        XCTAssertTrue(command.redactedCommand.contains("dev@example.com:/srv/"))
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("volname=Server - srv"))
         XCTAssertFalse(command.arguments.contains("PreferredAuthentications=keyboard-interactive,password"))
         XCTAssertFalse(command.arguments.contains("KbdInteractiveAuthentication=yes"))
@@ -134,7 +134,7 @@ final class MountArgBuilderTests: XCTestCase {
         )
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
-        XCTAssertTrue(command.arguments.contains("philip@192.168.1.55:/C:/Users/philip"))
+        XCTAssertTrue(command.arguments.contains("philip@192.168.1.55:/C:/Users/philip/"))
         XCTAssertTrue(command.arguments.joined(separator: " ").contains("volname=Windows Host - philip"))
     }
 
@@ -155,8 +155,70 @@ final class MountArgBuilderTests: XCTestCase {
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
         let optionFlagCount = command.arguments.filter { $0 == "-o" }.count
 
-        XCTAssertEqual(optionFlagCount, 12)
+        XCTAssertEqual(optionFlagCount, 10)
         XCTAssertTrue(command.arguments.contains("IdentityFile=/Users/dev/.ssh/id\\,ed25519"))
+    }
+
+    func testPrivateKeyModeIncludesEnabledProxyJump() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .privateKey,
+            privateKeyPath: "/Users/dev/.ssh/id_ed25519",
+            proxyJumpEnabled: true,
+            proxyJump: "jump@bastion.example.com:2222",
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+
+        XCTAssertTrue(command.arguments.contains("ProxyJump=jump@bastion.example.com:2222"))
+    }
+
+    func testProxyJumpValueIsIgnoredWhenDisabled() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .systemSSH,
+            privateKeyPath: nil,
+            proxyJumpEnabled: false,
+            proxyJump: "jump@bastion.example.com:2222",
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+
+        XCTAssertFalse(command.arguments.joined(separator: " ").contains("ProxyJump="))
+    }
+
+    func testPasswordModeIncludesEnabledProxyJumpInsideSSHCommand() {
+        let builder = MountCommandBuilder(redactionService: RedactionService())
+        let remote = RemoteConfig(
+            displayName: "Server",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: nil,
+            proxyJumpEnabled: true,
+            proxyJump: "jump@bastion.example.com:2222",
+            remoteDirectory: "/srv",
+            localMountPoint: "/Volumes/server"
+        )
+
+        let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
+
+        XCTAssertTrue(command.arguments.contains(
+            "ssh_command=/usr/bin/ssh -o PubkeyAuthentication=no -o KbdInteractiveAuthentication=yes -o PasswordAuthentication=yes -o PreferredAuthentications=keyboard-interactive\\,password -o NumberOfPasswordPrompts=1 -o ProxyJump=jump@bastion.example.com:2222"
+        ))
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
@@ -176,7 +238,7 @@ final class MountArgBuilderTests: XCTestCase {
         )
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
-        XCTAssertTrue(command.arguments.contains("dev@[::1]:/srv"))
+        XCTAssertTrue(command.arguments.contains("dev@[::1]:/srv/"))
     }
 
     func testBracketedIPv6FullAddressPassesThroughUnchanged() {
@@ -193,7 +255,7 @@ final class MountArgBuilderTests: XCTestCase {
         )
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
-        XCTAssertTrue(command.arguments.contains("alice@[2001:db8::1]:/home/alice"))
+        XCTAssertTrue(command.arguments.contains("alice@[2001:db8::1]:/home/alice/"))
     }
 
     func testIdentityFilePathIsNormalizedLexicallyWithoutFilesystemResolution() {
@@ -232,7 +294,7 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertFalse(command.arguments.joined(separator: " ").contains("KbdInteractiveAuthentication="))
         XCTAssertFalse(command.arguments.joined(separator: " ").contains("PasswordAuthentication="))
         XCTAssertFalse(command.arguments.joined(separator: " ").contains("PubkeyAuthentication="))
-        XCTAssertTrue(command.arguments.contains("philip@tailnode.ts.net:/home/philip"))
+        XCTAssertTrue(command.arguments.contains("philip@tailnode.ts.net:/home/philip/"))
     }
 
     func testPlainHostnameIsNotBracketed() {
@@ -249,7 +311,7 @@ final class MountArgBuilderTests: XCTestCase {
         )
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
-        XCTAssertTrue(command.arguments.contains("dev@example.com:/srv"))
+        XCTAssertTrue(command.arguments.contains("dev@example.com:/srv/"))
         XCTAssertFalse(command.arguments.contains("[example.com]"))
     }
 
@@ -274,7 +336,7 @@ final class MountArgBuilderTests: XCTestCase {
         XCTAssertNotEqual(volumeOption, "volname=macfuseGui")
     }
 
-    func testBaseOptionsIncludeNoAppleXattr() {
+    func testBaseOptionsAllowAppleDoubleFallbackForFinderCopies() {
         let builder = MountCommandBuilder(redactionService: RedactionService())
         let remote = RemoteConfig(
             displayName: "Server",
@@ -288,8 +350,9 @@ final class MountArgBuilderTests: XCTestCase {
         )
 
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
-        XCTAssertTrue(command.arguments.contains("noapplexattr"))
-        XCTAssertTrue(command.arguments.contains("noappledouble"))
+        XCTAssertTrue(command.arguments.contains("defer_permissions"))
+        XCTAssertFalse(command.arguments.contains("noapplexattr"))
+        XCTAssertFalse(command.arguments.contains("noappledouble"))
     }
 
     func testFastModeWithDCacheCapabilities() {

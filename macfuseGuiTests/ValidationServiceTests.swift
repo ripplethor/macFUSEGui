@@ -152,6 +152,46 @@ final class ValidationServiceTests: XCTestCase {
         XCTAssertTrue(errors.isEmpty)
     }
 
+    func testValidationRejectsEnabledEmptyProxyJump() {
+        var draft = RemoteDraft(
+            displayName: "Jump Remote",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "/home/dev",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+        draft.proxyJumpEnabled = true
+        draft.proxyJump = " "
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.contains("Choose or enter a jump host, or turn off the jump host option."))
+    }
+
+    func testValidationRejectsProxyJumpWithSpaces() {
+        var draft = RemoteDraft(
+            displayName: "Jump Remote",
+            host: "example.com",
+            port: 22,
+            username: "dev",
+            authMode: .password,
+            privateKeyPath: "",
+            password: "secret",
+            remoteDirectory: "/home/dev",
+            localMountPoint: FileManager.default.temporaryDirectory.path
+        )
+        draft.proxyJumpEnabled = true
+        draft.proxyJump = "jump host"
+
+        let service = ValidationService()
+        let errors = service.validateDraft(draft, hasStoredPassword: false)
+        XCTAssertTrue(errors.contains("Jump host cannot contain spaces. Use user@host[:port] or a comma-separated chain."))
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     func testValidationRejectsHostWithControlCharacter() {
         let draft = RemoteDraft(

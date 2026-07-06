@@ -30,6 +30,8 @@ final class RemoteStoreTests: XCTestCase {
             username: "dev",
             authMode: .privateKey,
             privateKeyPath: "/Users/test/.ssh/id_ed25519",
+            proxyJumpEnabled: true,
+            proxyJump: "jump@example.com:2222",
             remoteDirectory: "/srv",
             localMountPoint: tempDir.path,
             isFavorite: true,
@@ -46,6 +48,8 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded.first?.displayName, "Test")
         XCTAssertEqual(loaded.first?.host, "example.com")
         XCTAssertEqual(loaded.first?.isFavorite, true)
+        XCTAssertEqual(loaded.first?.proxyJumpEnabled, true)
+        XCTAssertEqual(loaded.first?.proxyJump, "jump@example.com:2222")
         XCTAssertEqual(loaded.first?.autoConnectOnLaunch, true)
         XCTAssertEqual(loaded.first?.disableLocalCaches, false)
         XCTAssertEqual(loaded.first?.favoriteRemoteDirectories, ["/srv", "/srv/projects"])
@@ -89,6 +93,8 @@ final class RemoteStoreTests: XCTestCase {
         XCTAssertEqual(loaded[0].id, remoteID)
         XCTAssertEqual(loaded[0].displayName, "Legacy Remote")
         XCTAssertFalse(loaded[0].isFavorite)
+        XCTAssertFalse(loaded[0].proxyJumpEnabled)
+        XCTAssertNil(loaded[0].proxyJump)
         XCTAssertFalse(loaded[0].autoConnectOnLaunch)
         XCTAssertTrue(loaded[0].disableLocalCaches)
         XCTAssertEqual(loaded[0].favoriteRemoteDirectories, [])
