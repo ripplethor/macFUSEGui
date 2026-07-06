@@ -283,17 +283,21 @@ cleanup() {
   # Runs for both normal and dry-run exits. In dry-run, tracked temp arrays are
   # expected to be empty, so this is effectively a no-op.
   local dmg
-  for dmg in "${CREATED_DMG_PATHS[@]}"; do
-    if [[ -n "$dmg" && -f "$dmg" ]]; then
-      rm -f "$dmg"
-    fi
-  done
+  if ((${#CREATED_DMG_PATHS[@]})); then
+    for dmg in "${CREATED_DMG_PATHS[@]}"; do
+      if [[ -n "$dmg" && -f "$dmg" ]]; then
+        rm -f "$dmg"
+      fi
+    done
+  fi
   local stage_dir
-  for stage_dir in "${CREATED_STAGE_DIRS[@]}"; do
-    if [[ -n "$stage_dir" && -d "$stage_dir" ]]; then
-      rm -rf "$stage_dir"
-    fi
-  done
+  if ((${#CREATED_STAGE_DIRS[@]})); then
+    for stage_dir in "${CREATED_STAGE_DIRS[@]}"; do
+      if [[ -n "$stage_dir" && -d "$stage_dir" ]]; then
+        rm -rf "$stage_dir"
+      fi
+    done
+  fi
   if [[ -n "$CREATED_NOTES_FILE" && -f "$CREATED_NOTES_FILE" ]]; then
     rm -f "$CREATED_NOTES_FILE"
   fi
