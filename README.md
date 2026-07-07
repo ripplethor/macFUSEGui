@@ -341,3 +341,5 @@ This project is licensed under the GNU General Public License v3.0.
 If you distribute a modified version, you must also provide the source under GPLv3.
 
 See [`LICENSE`](./LICENSE).
+
+See [`ACKNOWLEDGEMENTS.md`](./ACKNOWLEDGEMENTS.md) for community contributions and release-specific credits.
