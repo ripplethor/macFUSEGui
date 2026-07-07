@@ -99,6 +99,12 @@ commit bodies that the file also carries the other change.
 
 Use explicit `git add <file> [file ...]` — never `git add .` or `git add -A`.
 
+**When incorporating external PR work:** preserve contributor attribution. If the
+final commit substantially uses a contributor's proposed fix, include their
+`Co-Authored-By` trailer or clearly credit them in the commit body and release notes.
+Do not use dismissive wording such as "churn" for Xcode-generated `.xcstrings` or
+`.pbxproj` diffs; Xcode may rewrite those files during normal project use.
+
 ---
 
 ## 5. Making each commit

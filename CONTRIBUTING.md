@@ -63,7 +63,15 @@ Do not break these rules:
 9. Keep `sshHostArgument()` wrapping in `MountCommandBuilder` and `MountManager` — do not interpolate `remote.host` directly into `user@host:path` strings.
 10. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect`.
 
-## 6) Diagnostics for Bug Reports
+## 6) PR Review and Attribution
+
+When reviewing external PRs:
+1. Do not dismiss Xcode-generated `.xcstrings` or `.pbxproj` diffs as "churn" or careless work. Xcode 15+ can regenerate, re-sort, and retag string catalogs and project metadata as a normal side effect of opening or building the project.
+2. Separate generated-file noise from the contributor's actual logic, tests, and debugging work.
+3. If a PR is cherry-picked or manually reimplemented instead of merged, publicly credit the contributor in the PR, release notes, and commit body where practical.
+4. Preserve `Co-Authored-By` trailers when the final commit substantially uses a contributor's proposed fix, unless rewriting an already-published release history would be unsafe.
+
+## 7) Diagnostics for Bug Reports
 
 If reporting a bug, include:
 1. App menu -> `Copy Diagnostics` output.

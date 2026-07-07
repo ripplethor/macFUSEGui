@@ -568,3 +568,4 @@ Tests:
 18. Keep `KeychainService.readPassword` trimming — do not return the raw stored value with surrounding whitespace intact.
 19. Keep `sshHostArgument()` wrapping in `MountCommandBuilder.build` and `MountManager.forceStopProcesses` — do not interpolate `remote.host` directly into `user@host:path` strings.
 20. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect` — removing them reintroduces the stale-defer clobber of replacement task references.
+21. When taking fixes from an external PR, preserve contributor attribution in commit bodies, release notes, and PR comments. Do not call Xcode-generated `.xcstrings` or `.pbxproj` changes "churn"; Xcode 15+ can rewrite those files as normal project metadata.
