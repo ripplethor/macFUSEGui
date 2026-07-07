@@ -14,4 +14,6 @@ Thanks to @Yike-Ye for PR #6, which identified and proposed fixes for:
 
 The final implementation was applied directly to `main` while the maintainer's MacBook was in for repair, but the investigation and proposed fixes came from that contribution.
 
+Attribution correction: the original v0.1.36 fix commit should have credited this PR directly. Because the release tag was already published before that omission was caught, the project records the attribution here and in a follow-up commit rather than rewriting public release history.
+
 Thanks to @timc3 for PR #4, which raised the SSH host-key verification issue in the built-in browser and source tarball checksum pinning for release builds.
