@@ -1354,12 +1354,13 @@ actor MountManager {
         normalizedMountPoint: String,
         operationID: UUID?
     ) async throws -> MountRecord? {
-        if let record = try await currentMountRecord(
+        let lookup = try await currentMountRecordReportingDF(
             for: normalizedMountPoint,
             remoteID: remote.id,
             operationID: operationID,
             allowMountFallbackOnDFNotMounted: true
-        ) {
+        )
+        if let record = lookup.record {
             return record
         }
 
@@ -1371,11 +1372,21 @@ actor MountManager {
             remoteID: remote.id,
             operationID: operationID
         ) {
-            diagnostics.append(
-                level: .warning,
-                category: "mount",
-                message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
-            )
+            if lookup.dfReportedNotMounted {
+                // df first saw the parent filesystem and now sees the mount: it finished mounting
+                // while `/sbin/mount` ran. Routine while polling a foreground sshfs.
+                diagnostics.append(
+                    level: .debug,
+                    category: "mount",
+                    message: "Mount for \(remote.displayName) at \(normalizedMountPoint) became visible during post-connect probing; confirmed by df re-check."
+                )
+            } else {
+                diagnostics.append(
+                    level: .warning,
+                    category: "mount",
+                    message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
+                )
+            }
             return fallback
         }
 
@@ -1625,20 +1636,38 @@ actor MountManager {
         operationID: UUID? = nil,
         allowMountFallbackOnDFNotMounted: Bool = false
     ) async throws -> MountRecord? {
+        try await currentMountRecordReportingDF(
+            for: mountPoint,
+            remoteID: remoteID,
+            operationID: operationID,
+            allowMountFallbackOnDFNotMounted: allowMountFallbackOnDFNotMounted
+        ).record
+    }
+
+    /// Beginner note: Same lookup as `currentMountRecord`, also reporting whether the initial
+    /// df probe saw the parent filesystem (not mounted) rather than an inconclusive result.
+    private func currentMountRecordReportingDF(
+        for mountPoint: String,
+        remoteID: UUID? = nil,
+        operationID: UUID? = nil,
+        allowMountFallbackOnDFNotMounted: Bool = false
+    ) async throws -> (record: MountRecord?, dfReportedNotMounted: Bool) {
         let normalizedMountPoint = LocalPathNormalizer.normalize(mountPoint)
         let remoteText = remoteID?.uuidString ?? "-"
         let operationText = operationID?.uuidString ?? "-"
         try throwIfCancelled()
+        var dfReportedNotMounted = false
         switch try await currentMountRecordViaDFLookup(
             for: normalizedMountPoint,
             remoteID: remoteID,
             operationID: operationID
         ) {
         case .mounted(let record):
-            return record
+            return (record, false)
         case .notMounted where !allowMountFallbackOnDFNotMounted:
-            return nil
+            return (nil, true)
         case .notMounted:
+            dfReportedNotMounted = true
             diagnostics.append(
                 level: .debug,
                 category: "mount",
@@ -1656,7 +1685,7 @@ actor MountManager {
 
         if !mountResult.timedOut && mountResult.exitCode == 0 {
             let records = mountStateParser.parseMountOutput(mountResult.stdout)
-            return mountStateParser.record(forMountPoint: normalizedMountPoint, from: records)
+            return (mountStateParser.record(forMountPoint: normalizedMountPoint, from: records), dfReportedNotMounted)
         }
 
         let lastFailure = mountInspectionFailureDetail(from: mountResult)
@@ -1676,7 +1705,7 @@ actor MountManager {
                 category: "mount",
                 message: "Recovered mount inspection using df fallback for \(normalizedMountPoint)."
             )
-            return fallback
+            return (fallback, dfReportedNotMounted)
         }
 
         throw AppError.processFailure(L10n.format("Failed to inspect mounts: %@", lastFailure))

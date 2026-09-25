@@ -949,6 +949,52 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertEqual(launched.first?.wasTerminated, true, "A sshfs that never mounted must not be left running.")
     }
 
+    /// Beginner note: While polling a foreground sshfs, the mount often finishes during the slow
+    /// `/sbin/mount` read, so df first shows the parent filesystem and then the mount. That is
+    /// routine and must not be logged as a detection warning.
+    func testMountAppearingDuringProbingIsNotLoggedAsDFFallbackWarning() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/foreground-race"
+        let diagnostics = DiagnosticsService()
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            mountInspectionDelay: 0.3,
+            dfVisibilityDelayByMountPoint: [mountPoint: 0.2],
+            forceUnparseableMountOutput: true,
+            foregroundSSHFS: .mountsAfter(0)
+        )
+        let manager = makeManager(runner: runner, diagnostics: diagnostics)
+        let remote = makeRemote(name: "Race", mountPoint: mountPoint)
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .connected)
+        let log = diagnostics.snapshot(remotes: [], statuses: [:], dependency: nil)
+        XCTAssertTrue(log.contains("became visible during post-connect probing"), log)
+        XCTAssertFalse(log.contains("recovered via df fallback"), log)
+    }
+
+    /// Beginner note: When df was inconclusive and the mount table did not match, finding the
+    /// mount only through df is still worth a warning (possible mount-output parser mismatch).
+    func testDFFallbackAfterInconclusiveDFStillLogsWarning() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/foreground-df-inconclusive"
+        let diagnostics = DiagnosticsService()
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            mountInspectionDelay: 0.3,
+            forceUnparseableMountOutput: true,
+            foregroundSSHFS: .mountsAfter(0.15)
+        )
+        let manager = makeManager(runner: runner, diagnostics: diagnostics)
+        let remote = makeRemote(name: "Inconclusive", mountPoint: mountPoint)
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .connected)
+        let log = diagnostics.snapshot(remotes: [], statuses: [:], dependency: nil)
+        XCTAssertTrue(log.contains("[warning] [mount] Post-connect detection recovered via df fallback"), log)
+        XCTAssertFalse(log.contains("became visible during post-connect probing"), log)
+    }
+
     func testRemovingBenignSSHFSOutputKeepsOutputWhenOnlyNoiseRemains() {
         let onlyNoise = "fuse: forking after mount is not supported"
         XCTAssertEqual(MountManager.removingBenignSSHFSOutput(onlyNoise), onlyNoise)
@@ -975,11 +1021,11 @@ final class MountManagerParallelOperationTests: XCTestCase {
 
     private func makeManager(
         runner: ProcessRunning,
+        diagnostics: DiagnosticsService = DiagnosticsService(),
         sshfsConnectCommandTimeout: TimeInterval = 20,
         postConnectMountDetectionTimeout: TimeInterval = 15,
         directoryQueryReconnectCooldownSeconds: TimeInterval = 30
     ) -> MountManager {
-        let diagnostics = DiagnosticsService()
         let parser = MountStateParser()
         return MountManager(
             runner: runner,
