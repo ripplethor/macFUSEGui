@@ -135,7 +135,13 @@ Connect flow highlights:
 - Auto-create missing local mount folder.
 - Retry once for transient failures (`resource busy`, reset/timeout/network-type failures).
 - Minimum transition visibility (~0.8s) to keep UI from appearing frozen or skipping states.
-- Verifies mount appears after sshfs exit before reporting success.
+- sshfs runs in the foreground (`-f`) as a detached child from `ProcessRunner.launchDetached`: `posix_spawn` with `POSIX_SPAWN_SETSID` (own session and process group), stdin `/dev/null`, stdout/stderr to a private temp log.
+  - Why: macFUSE 5.4+ libfuse no longer forks after the mount has started, and sshfs starts the mount before it daemonizes, so a non-`-f` sshfs never returns control (issue #8).
+  - Success means the mount appears while sshfs is still running. The handle is then released, the process is reaped when it exits (on unmount), and the mount outlives the app like a self-daemonized sshfs did.
+  - A non-zero exit before the mount appears fails the connect with the sshfs/ssh output. Foreground mode keeps ssh's stderr, so errors like `Permission denied (publickey)` reach the user and are classified as permanent. `MountManager.removingBenignSSHFSOutput` strips macFUSE fork warnings and ssh "Permanently added" notices.
+  - A clean exit before the mount appears (sshfs builds that still detach) falls back to the post-exit `waitForMountAppearance` verification.
+  - On timeout (sshfs connect command timeout, 20s) or cancellation the whole process group is terminated.
+  - When the sshfs leader exits, leftover members of its process group are killed before it is reaped. This clears an orphaned `mount_macfuse` helper that would otherwise block the mount point for about a minute.
 
 Disconnect flow highlights:
 - Unmount via `UnmountService` with multiple command rounds (`diskutil`, `umount`, force variants).
@@ -545,6 +551,7 @@ Tests:
 13. `KeychainService.readPassword` trims whitespace before returning — prevents silent auth failures from clipboard-pasted trailing newlines without changing the stored credential.
 14. `sshHostArgument()` brackets IPv6 host addresses in both the sshfs source arg and the connection-needle process search — prevents ambiguous `user@::1:/path` colons from breaking sshfs and process matching.
 15. `if !Task.isCancelled` guards in `scheduleRecoveryBurst` and `scheduleAutoReconnect` defer blocks — prevents a cancelled task's cleanup from clobbering the replacement task's reference on the next main-actor turn.
+16. Foreground `sshfs -f` launched in its own session with process-group cleanup — works with macFUSE 5.4+ (no fork after mount), keeps mounts alive after the app quits, and never leaves orphaned mount helpers.
 
 ## 20) Safe-Change Rules for Future Agents
 
@@ -569,3 +576,5 @@ Tests:
 19. Keep `sshHostArgument()` wrapping in `MountCommandBuilder.build` and `MountManager.forceStopProcesses` — do not interpolate `remote.host` directly into `user@host:path` strings.
 20. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect` — removing them reintroduces the stale-defer clobber of replacement task references.
 21. When taking fixes from an external PR, preserve contributor attribution in commit bodies, release notes, and PR comments. Do not call Xcode-generated `.xcstrings` or `.pbxproj` changes "churn"; Xcode 15+ can rewrite those files as normal project metadata.
+22. Keep `-f` in `MountCommandBuilder` and launch sshfs through `ProcessRunning.launchDetached`. Do not go back to waiting for sshfs to exit, and do not run the mount through Foundation `Process`: the child would share the app's process group, where launchd's job cleanup can kill it.
+23. Only signal a detached process group while its leader is unreaped (`SpawnedDetachedProcess.exitState` uses `WNOWAIT`), so a reused PID is never signalled.

@@ -131,7 +131,11 @@ final class MountCommandBuilder {
             }
         }
 
-        var args: [String] = ["-p", "\(remote.port)"]
+        // Foreground mode: MountManager launches sshfs as a detached child and treats
+        // "mount appeared" as success. macFUSE 5.4+ no longer lets libfuse fork after the
+        // mount has started, and sshfs mounts before it daemonizes, so without `-f` it stays
+        // attached anyway. `-f` also keeps ssh's stderr, so auth failures reach the user.
+        var args: [String] = ["-f", "-p", "\(remote.port)"]
         for option in options {
             args.append("-o")
             args.append(option)

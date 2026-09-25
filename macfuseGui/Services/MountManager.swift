@@ -1217,37 +1217,15 @@ actor MountManager {
                 message: "probe start op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint)"
             )
 
-            let result = try await runner.run(
+            let process = try await runner.launchDetached(
                 executable: command.executable,
                 arguments: command.arguments,
-                environment: command.environment,
-                timeout: sshfsConnectCommandTimeout
+                environment: command.environment
             )
-            let commandElapsedMs = Int(Date().timeIntervalSince(commandStartedAt) * 1_000)
-            diagnostics.append(
-                level: .debug,
-                category: "mount",
-                message: "probe end op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint) elapsedMs=\(commandElapsedMs) timedOut=\(result.timedOut) exit=\(result.exitCode)"
-            )
-
-            try throwIfCancelled()
-
-            if result.timedOut {
-                throw AppError.timeout(L10n.tr("sshfs connect timed out."))
-            }
-
-            if result.exitCode != 0 {
-                let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-                let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-                let rawMessage = stderr.isEmpty ? stdout : stderr
-                let message = friendlyMountError(rawMessage, remote: remote)
-                throw AppError.processFailure(
-                    message.isEmpty ? L10n.format("sshfs failed with exit code %lld", Int64(result.exitCode)) : message
-                )
-            }
-
-            return try await waitForMountAppearance(
+            return try await waitForSSHFSMount(
+                process: process,
                 remote: remote,
+                commandStartedAt: commandStartedAt,
                 updateStoredStatus: updateStoredStatus,
                 operationID: operationID
             )
@@ -1264,6 +1242,157 @@ actor MountManager {
         }
 
         return try await runConnectAttempt(passwordEnvironment: [:])
+    }
+
+    /// Beginner note: sshfs runs in the foreground (`-f`) as a detached child, so success means
+    /// "the mount appeared while sshfs is still running", not "sshfs exited 0". macFUSE 5.4+ does not
+    /// let libfuse file systems fork after mounting. A clean exit before the mount appears is still
+    /// accepted for sshfs builds that detach on their own, then confirmed by `waitForMountAppearance`.
+    private func waitForSSHFSMount(
+        process: DetachedProcess,
+        remote: RemoteConfig,
+        commandStartedAt: Date,
+        updateStoredStatus: Bool,
+        operationID: UUID?
+    ) async throws -> RemoteStatus {
+        let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
+        let deadline = commandStartedAt.addingTimeInterval(sshfsConnectCommandTimeout)
+
+        func logProbeEnd(timedOut: Bool, exit: String, mounted: Bool) {
+            let elapsedMs = Int(Date().timeIntervalSince(commandStartedAt) * 1_000)
+            diagnostics.append(
+                level: .debug,
+                category: "mount",
+                message: "probe end op=sshfs-connect remoteID=\(remote.id.uuidString) operationID=\(operationID?.uuidString ?? "-") mountPoint=\(remote.localMountPoint) elapsedMs=\(elapsedMs) timedOut=\(timedOut) exit=\(exit) mounted=\(mounted)"
+            )
+        }
+
+        do {
+            while true {
+                try throwIfCancelled()
+
+                if let exit = await process.pollExit() {
+                    logProbeEnd(timedOut: false, exit: String(exit.exitCode), mounted: false)
+                    guard exit.exitCode == 0 else {
+                        let rawOutput = exit.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !rawOutput.isEmpty {
+                            diagnostics.append(
+                                level: .debug,
+                                category: "mount",
+                                message: "sshfs output for \(remote.displayName): \(rawOutput)"
+                            )
+                        }
+                        let message = friendlyMountError(rawOutput, remote: remote)
+                        throw AppError.processFailure(
+                            message.isEmpty ? L10n.format("sshfs failed with exit code %lld", Int64(exit.exitCode)) : message
+                        )
+                    }
+                    return try await waitForMountAppearance(
+                        remote: remote,
+                        updateStoredStatus: updateStoredStatus,
+                        operationID: operationID
+                    )
+                }
+
+                let record: MountRecord?
+                do {
+                    record = try await probeConnectedMountRecord(
+                        remote: remote,
+                        normalizedMountPoint: normalizedMountPoint,
+                        operationID: operationID
+                    )
+                } catch {
+                    try throwIfCancelled()
+                    record = await currentMountRecordViaDistinctFilesystemCheck(
+                        for: normalizedMountPoint,
+                        remoteID: remote.id,
+                        operationID: operationID
+                    )
+                }
+
+                if let record {
+                    logProbeEnd(timedOut: false, exit: "running", mounted: true)
+                    await process.release()
+                    let status = RemoteStatus(
+                        state: .connected,
+                        mountedPath: record.mountPoint,
+                        lastError: nil,
+                        updatedAt: Date()
+                    )
+                    if updateStoredStatus {
+                        updateCachedStatus(status, for: remote.id)
+                    }
+                    return status
+                }
+
+                if Date() >= deadline {
+                    logProbeEnd(timedOut: true, exit: "running", mounted: false)
+                    let output = await process.capturedOutput()
+                        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    diagnostics.append(
+                        level: .warning,
+                        category: "mount",
+                        message: "sshfs for \(remote.displayName) was still running without a visible mount after \(Int(sshfsConnectCommandTimeout.rounded()))s. Output: \(output.isEmpty ? "-" : output)"
+                    )
+                    throw AppError.timeout(L10n.tr("sshfs connect timed out."))
+                }
+
+                try await Task.sleep(nanoseconds: 250_000_000)
+            }
+        } catch {
+            // Never leave a half-connected sshfs behind; it could mount after we reported failure.
+            await process.terminate()
+            throw error
+        }
+    }
+
+    /// Beginner note: One post-connect detection pass: mount table/df lookup, then df and
+    /// distinct-filesystem fallbacks for mount output variants the parser cannot match.
+    private func probeConnectedMountRecord(
+        remote: RemoteConfig,
+        normalizedMountPoint: String,
+        operationID: UUID?
+    ) async throws -> MountRecord? {
+        if let record = try await currentMountRecord(
+            for: normalizedMountPoint,
+            remoteID: remote.id,
+            operationID: operationID,
+            allowMountFallbackOnDFNotMounted: true
+        ) {
+            return record
+        }
+
+        // Some mount output variants can be syntactically valid but not match our
+        // parser shape. Use df fallback during connect detection to avoid false
+        // negatives when sshfs has already established the mount.
+        if let fallback = try await currentMountRecordViaDF(
+            for: normalizedMountPoint,
+            remoteID: remote.id,
+            operationID: operationID
+        ) {
+            diagnostics.append(
+                level: .warning,
+                category: "mount",
+                message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
+            )
+            return fallback
+        }
+
+        if let distinctFilesystemFallback = await currentMountRecordViaDistinctFilesystemCheck(
+            for: normalizedMountPoint,
+            remoteID: remote.id,
+            operationID: operationID
+        ) {
+            diagnostics.append(
+                level: .warning,
+                category: "mount",
+                message: "Post-connect detection recovered via distinct-filesystem fallback for \(remote.displayName) at \(normalizedMountPoint)."
+            )
+            return distinctFilesystemFallback
+        }
+
+        return nil
     }
 
     private func waitForMountAppearance(
@@ -1300,52 +1429,14 @@ actor MountManager {
             }
 
             do {
-                if let record = try await currentMountRecord(
-                    for: normalizedMountPoint,
-                    remoteID: remote.id,
-                    operationID: operationID,
-                    allowMountFallbackOnDFNotMounted: true
+                if let record = try await probeConnectedMountRecord(
+                    remote: remote,
+                    normalizedMountPoint: normalizedMountPoint,
+                    operationID: operationID
                 ) {
                     let status = connectedStatus(from: record)
                     if updateStoredStatus {
                         // Skip status cache updates in "test connection" mode.
-                        updateCachedStatus(status, for: remote.id)
-                    }
-                    return status
-                }
-
-                // Some mount output variants can be syntactically valid but not match our
-                // parser shape. Use df fallback during connect detection to avoid false
-                // negatives when sshfs has already established the mount.
-                if let fallback = try await currentMountRecordViaDF(
-                    for: normalizedMountPoint,
-                    remoteID: remote.id,
-                    operationID: operationID
-                ) {
-                    diagnostics.append(
-                        level: .warning,
-                        category: "mount",
-                        message: "Post-connect detection recovered via df fallback for \(remote.displayName) at \(normalizedMountPoint)."
-                    )
-                    let status = connectedStatus(from: fallback)
-                    if updateStoredStatus {
-                        updateCachedStatus(status, for: remote.id)
-                    }
-                    return status
-                }
-
-                if let distinctFilesystemFallback = await currentMountRecordViaDistinctFilesystemCheck(
-                    for: normalizedMountPoint,
-                    remoteID: remote.id,
-                    operationID: operationID
-                ) {
-                    diagnostics.append(
-                        level: .warning,
-                        category: "mount",
-                        message: "Post-connect detection recovered via distinct-filesystem fallback for \(remote.displayName) at \(normalizedMountPoint)."
-                    )
-                    let status = connectedStatus(from: distinctFilesystemFallback)
-                    if updateStoredStatus {
                         updateCachedStatus(status, for: remote.id)
                     }
                     return status
@@ -1963,7 +2054,7 @@ actor MountManager {
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func friendlyMountError(_ raw: String, remote: RemoteConfig) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = Self.removingBenignSSHFSOutput(raw)
         guard !trimmed.isEmpty else {
             return trimmed
         }
@@ -1981,6 +2072,33 @@ actor MountManager {
         }
 
         return trimmed
+    }
+
+    /// Beginner note: Drops lines that sshfs, macFUSE's libfuse, or ssh print on healthy runs so the
+    /// real failure (for example an ssh authentication error) is what the user sees.
+    /// Falls back to the full output when nothing else is left.
+    nonisolated static func removingBenignSSHFSOutput(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let meaningfulLines = trimmed
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { line in
+                let lower = line.lowercased()
+                if lower.isEmpty {
+                    return false
+                }
+                // macFUSE 5.4+ libfuse warnings; informational, not the cause of a failure.
+                if lower.hasPrefix("fuse: forking a threaded process is unsafe")
+                    || lower.hasPrefix("fuse: forking after mount is not supported") {
+                    return false
+                }
+                // First-connect notice from ssh when accept-new records the host key.
+                if lower.hasPrefix("warning: permanently added"), lower.contains("known hosts") {
+                    return false
+                }
+                return true
+            }
+        return meaningfulLines.isEmpty ? trimmed : meaningfulLines.joined(separator: "\n")
     }
 
     /// Beginner note: This is a bounded, non-recursive emergency cleanup path.

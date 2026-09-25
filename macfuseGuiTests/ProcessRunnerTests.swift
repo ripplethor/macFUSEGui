@@ -787,8 +787,195 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertTrue(summary.contains("cooldownSuppressions=0"))
     }
 
+    // MARK: - Detached (foreground sshfs) processes
+
+    func testLaunchDetachedStartsChildInItsOwnSessionAndTerminateStopsIt() async throws {
+        let runner = ProcessRunner()
+        let process = try await runner.launchDetached(
+            executable: "/bin/sleep",
+            arguments: ["30"],
+            environment: [:]
+        )
+        let spawned = try XCTUnwrap(process as? SpawnedDetachedProcess)
+
+        XCTAssertEqual(getsid(spawned.pid), spawned.pid, "Child must lead its own session so it outlives the app.")
+        XCTAssertNotEqual(getpgid(spawned.pid), getpgrp(), "Child must not share the app's process group.")
+        let stillRunning = await process.pollExit()
+        XCTAssertNil(stillRunning)
+
+        await process.terminate()
+
+        let exit = await process.pollExit()
+        XCTAssertEqual(exit?.exitCode, 128 + SIGTERM)
+    }
+
+    func testLaunchDetachedCapturesOutputAndExitCode() async throws {
+        let runner = ProcessRunner()
+        let process = try await runner.launchDetached(
+            executable: "/bin/sh",
+            arguments: ["-c", "echo out-line; echo err-line 1>&2; echo \"value=$MACFUSEGUI_DETACHED_TEST\"; exit 3"],
+            environment: ["MACFUSEGUI_DETACHED_TEST": "42"]
+        )
+
+        let exit = try await waitForDetachedExit(process)
+
+        XCTAssertEqual(exit.exitCode, 3)
+        XCTAssertTrue(exit.output.contains("out-line"))
+        XCTAssertTrue(exit.output.contains("err-line"))
+        XCTAssertTrue(exit.output.contains("value=42"))
+    }
+
+    func testReleasedDetachedChildKeepsRunningAndIsReapedOnExit() async throws {
+        let runner = ProcessRunner()
+        let process = try await runner.launchDetached(
+            executable: "/bin/sleep",
+            arguments: ["30"],
+            environment: [:]
+        )
+        let pid = try XCTUnwrap(process as? SpawnedDetachedProcess).pid
+
+        await process.release()
+        XCTAssertEqual(kill(pid, 0), 0, "Released child should keep running.")
+
+        _ = kill(pid, SIGKILL)
+        // A zombie still accepts kill(pid, 0); ESRCH means the reaper collected it.
+        let deadline = Date().addingTimeInterval(3)
+        var reaped = false
+        while Date() < deadline {
+            if kill(pid, 0) == -1 && errno == ESRCH {
+                reaped = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(reaped, "Released child should be reaped after it exits.")
+    }
+
+    /// Beginner note: A failed sshfs can leave its mount_macfuse helper running, which blocks the
+    /// mount point for the next attempt. Leftover members of the child's process group are cleared.
+    func testDetachedExitClearsLeftoverChildrenInItsProcessGroup() async throws {
+        let runner = ProcessRunner()
+        let process = try await runner.launchDetached(
+            executable: "/bin/sh",
+            arguments: ["-c", "/bin/sleep 30 & echo \"leftover=$!\"; exit 1"],
+            environment: [:]
+        )
+
+        let exit = try await waitForDetachedExit(process)
+        XCTAssertEqual(exit.exitCode, 1)
+        let leftoverText = try XCTUnwrap(
+            exit.output.split(separator: "\n").first { $0.hasPrefix("leftover=") }
+        )
+        let leftoverPID = try XCTUnwrap(pid_t(leftoverText.dropFirst("leftover=".count)))
+
+        let deadline = Date().addingTimeInterval(3)
+        var cleared = false
+        while Date() < deadline {
+            if kill(leftoverPID, 0) == -1 && errno == ESRCH {
+                cleared = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(cleared, "Leftover child in the detached process group should be killed.")
+    }
+
+    func testDecodedExitCodeHandlesNormalAndSignalExits() {
+        XCTAssertEqual(SpawnedDetachedProcess.decodedExitCode(3 << 8), 3)
+        XCTAssertEqual(SpawnedDetachedProcess.decodedExitCode(SIGTERM), 128 + SIGTERM)
+    }
+
+    /// Beginner note: macFUSE 5.4+ keeps sshfs in the foreground after mounting. Connect must succeed
+    /// once the mount appears and leave the process running instead of waiting for it to exit.
+    func testConnectSucceedsWhenForegroundSSHFSMountsWhileStillRunning() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/foreground-mounts"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            foregroundSSHFS: .mountsAfter(0.3)
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Foreground", mountPoint: mountPoint)
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .connected)
+        let launched = await runner.launchedForegroundSSHFS
+        XCTAssertEqual(launched.count, 1)
+        XCTAssertEqual(launched.first?.arguments.first, "-f")
+        XCTAssertEqual(launched.first?.wasReleased, true, "Mounted sshfs must be left running.")
+        XCTAssertEqual(launched.first?.wasTerminated, false)
+    }
+
+    /// Beginner note: Regression for issue #8. The real ssh error must reach the user instead of
+    /// macFUSE's fork warning, so permanent failures (auth) stop the reconnect loop.
+    func testForegroundSSHFSFailureReportsSSHErrorWithoutMacFUSEForkWarnings() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/foreground-auth-failure"
+        let output = """
+        fuse: forking a threaded process is unsafe, the child may crash or deadlock
+        Warning: Permanently added 'pi.local' (ED25519) to the list of known hosts.
+        dev@pi.local: Permission denied (publickey).
+        remote host has disconnected
+        """
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            foregroundSSHFS: .exits(code: 1, output: output)
+        )
+        let manager = makeManager(runner: runner)
+        let remote = makeRemote(name: "Auth Failure", mountPoint: mountPoint)
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .error)
+        let lastError = try XCTUnwrap(status.lastError)
+        XCTAssertTrue(lastError.contains("Permission denied (publickey)"), lastError)
+        XCTAssertFalse(lastError.contains("forking"), lastError)
+        XCTAssertFalse(lastError.contains("Permanently added"), lastError)
+    }
+
+    func testForegroundSSHFSIsTerminatedWhenMountNeverAppears() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/foreground-hangs"
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:],
+            foregroundSSHFS: .hangs
+        )
+        let manager = makeManager(runner: runner, sshfsConnectCommandTimeout: 1)
+        let remote = makeRemote(name: "Hangs", mountPoint: mountPoint)
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .error)
+        XCTAssertTrue(status.lastError?.lowercased().contains("timed out") == true, status.lastError ?? "-")
+        let launched = await runner.launchedForegroundSSHFS
+        XCTAssertEqual(launched.first?.wasTerminated, true, "A sshfs that never mounted must not be left running.")
+    }
+
+    func testRemovingBenignSSHFSOutputKeepsOutputWhenOnlyNoiseRemains() {
+        let onlyNoise = "fuse: forking after mount is not supported"
+        XCTAssertEqual(MountManager.removingBenignSSHFSOutput(onlyNoise), onlyNoise)
+        XCTAssertEqual(
+            MountManager.removingBenignSSHFSOutput("fuse: forking after mount is not supported\nread: Connection reset by peer"),
+            "read: Connection reset by peer"
+        )
+    }
+
+    private func waitForDetachedExit(
+        _ process: DetachedProcess,
+        timeout: TimeInterval = 5
+    ) async throws -> DetachedProcessExit {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let exit = await process.pollExit() {
+                return exit
+            }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        await process.terminate()
+        return try XCTUnwrap(nil as DetachedProcessExit?, "Detached process did not exit within \(timeout)s")
+    }
+
     private func makeManager(
         runner: ProcessRunning,
+        sshfsConnectCommandTimeout: TimeInterval = 20,
         postConnectMountDetectionTimeout: TimeInterval = 15,
         directoryQueryReconnectCooldownSeconds: TimeInterval = 30
     ) -> MountManager {
@@ -806,6 +993,7 @@ final class MountManagerParallelOperationTests: XCTestCase {
             mountStateParser: parser,
             diagnostics: diagnostics,
             commandBuilder: MountCommandBuilder(redactionService: RedactionService()),
+            sshfsConnectCommandTimeout: sshfsConnectCommandTimeout,
             postConnectMountDetectionTimeout: postConnectMountDetectionTimeout,
             directoryQueryReconnectCooldownSeconds: directoryQueryReconnectCooldownSeconds
         )
@@ -822,6 +1010,67 @@ final class MountManagerParallelOperationTests: XCTestCase {
             remoteDirectory: "/D:/wwwroot",
             localMountPoint: mountPoint
         )
+    }
+}
+
+/// Beginner note: Stands in for `sshfs -f`: it keeps "running" after the mount appears, like
+/// sshfs under macFUSE 5.4+, until the caller releases or terminates it.
+private final class FakeForegroundSSHFS: DetachedProcess, @unchecked Sendable {
+    enum Behavior: Sendable {
+        case mountsAfter(TimeInterval)
+        case exits(code: Int32, output: String)
+        case hangs
+    }
+
+    let arguments: [String]
+    private let behavior: Behavior
+    private let lock = NSLock()
+    private var terminated = false
+    private var released = false
+
+    init(behavior: Behavior, arguments: [String]) {
+        self.behavior = behavior
+        self.arguments = arguments
+    }
+
+    var wasTerminated: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return terminated
+    }
+
+    var wasReleased: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return released
+    }
+
+    func pollExit() async -> DetachedProcessExit? {
+        lock.lock()
+        defer { lock.unlock() }
+        if terminated {
+            return DetachedProcessExit(exitCode: 143, output: "")
+        }
+        if case .exits(let code, let output) = behavior {
+            return DetachedProcessExit(exitCode: code, output: output)
+        }
+        return nil
+    }
+
+    func capturedOutput() async -> String {
+        ""
+    }
+
+    func terminate() async {
+        lock.lock()
+        terminated = true
+        lock.unlock()
+    }
+
+    func release() async {
+        lock.lock()
+        released = true
+        lock.unlock()
     }
 }
 
@@ -851,6 +1100,8 @@ private actor FakeMountRunner: ProcessRunning {
     private let dfVisibilityDelayByMountPoint: [String: TimeInterval]
     private let unmountVisibilityDelayByMountPoint: [String: TimeInterval]
     private let forceUnparseableMountOutput: Bool
+    private let foregroundSSHFS: FakeForegroundSSHFS.Behavior?
+    private(set) var launchedForegroundSSHFS: [FakeForegroundSSHFS] = []
 
     init(
         connectDelayByMountPoint: [String: TimeInterval],
@@ -863,7 +1114,8 @@ private actor FakeMountRunner: ProcessRunning {
         dfDelayByMountPoint: [String: TimeInterval] = [:],
         dfVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
         unmountVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
-        forceUnparseableMountOutput: Bool = false
+        forceUnparseableMountOutput: Bool = false,
+        foregroundSSHFS: FakeForegroundSSHFS.Behavior? = nil
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
         self.connectDelayScheduleByMountPoint = connectDelayScheduleByMountPoint
@@ -876,6 +1128,33 @@ private actor FakeMountRunner: ProcessRunning {
         self.dfVisibilityDelayByMountPoint = dfVisibilityDelayByMountPoint
         self.unmountVisibilityDelayByMountPoint = unmountVisibilityDelayByMountPoint
         self.forceUnparseableMountOutput = forceUnparseableMountOutput
+        self.foregroundSSHFS = foregroundSSHFS
+    }
+
+    /// Without `foregroundSSHFS`, sshfs keeps the legacy "exit 0, then mount appears" shape via `run`.
+    func launchDetached(
+        executable: String,
+        arguments: [String],
+        environment: [String: String]
+    ) async throws -> DetachedProcess {
+        guard executable.hasSuffix("sshfs"),
+              let behavior = foregroundSSHFS,
+              let mountPoint = arguments.last else {
+            return RunToCompletionDetachedProcess(
+                runner: self,
+                executable: executable,
+                arguments: arguments,
+                environment: environment
+            )
+        }
+
+        if case .mountsAfter(let delay) = behavior {
+            pendingMountActivationAtByMountPoint[mountPoint] = Date().addingTimeInterval(delay)
+            unmountPendingUntilByMountPoint.removeValue(forKey: mountPoint)
+        }
+        let process = FakeForegroundSSHFS(behavior: behavior, arguments: arguments)
+        launchedForegroundSSHFS.append(process)
+        return process
     }
 
     func simulateExternalUnmount(mountPoint: String) {

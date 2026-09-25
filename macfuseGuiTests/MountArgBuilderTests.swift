@@ -29,6 +29,8 @@ final class MountArgBuilderTests: XCTestCase {
         let command = builder.build(sshfsPath: "/opt/homebrew/bin/sshfs", remote: remote)
 
         XCTAssertEqual(command.executable, "/opt/homebrew/bin/sshfs")
+        // macFUSE 5.4+ cannot fork after mount; MountManager owns the foreground sshfs process.
+        XCTAssertEqual(command.arguments.first, "-f")
         XCTAssertTrue(command.arguments.contains("-p"))
         XCTAssertTrue(command.arguments.contains("2202"))
         XCTAssertTrue(command.arguments.contains("dev@example.com:/srv/"))
