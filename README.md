@@ -59,6 +59,8 @@ brew tap ripplethor/macfusegui https://github.com/ripplethor/macfuseGUI
 brew install --cask ripplethor/macfusegui/macfusegui
 ```
 
+The cask requires macOS 13 (Ventura) or later. If Homebrew says the app only runs on Ventura, your Homebrew is older than 5.1.11, which changed how `depends_on macos:` is read. Run `brew update` and try again.
+
 Expected `sshfs` search order:
 1. `/opt/homebrew/bin/sshfs`
 2. `/usr/local/bin/sshfs`

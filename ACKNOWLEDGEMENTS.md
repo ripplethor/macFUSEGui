@@ -2,6 +2,10 @@
 
 This project benefits from bug reports, testing, review, and pull requests from the community.
 
+## Unreleased (after v0.1.36)
+
+Thanks to @howardhey for PR #7, which replaced the Homebrew cask's deprecated `depends_on macos: ">= :ventura"` syntax in both the cask and the release script's cask template, so installs and upgrades no longer show a deprecation warning.
+
 ## v0.1.36
 
 Thanks to @Yike-Ye for PR #6, which identified and proposed fixes for:
