@@ -10,7 +10,7 @@ cask "macfusegui" do
   desc "SSHFS GUI for macOS using macFUSE"
   homepage "https://www.macfusegui.app/"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "macFUSEGui.app"
 
