@@ -373,6 +373,7 @@ final class UnmountService {
         var mountPointMatchedPIDs: [Int32] = []
         var sourceMatchedPIDs: [Int32] = []
         let expectedSource = mountSource?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let mountPointForms = MountStateParser.mountPointArgumentForms(mountPoint)
 
         for rawLine in result.stdout.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -395,8 +396,10 @@ final class UnmountService {
                 continue
             }
 
-            let matchesMountPoint = command.contains(mountPoint)
-            let matchesSource = expectedSource.map { command.contains($0) } ?? false
+            // Whole-argument matches only, so a sibling mount such as `/mnt/pi2` or
+            // `host:/home/site/` is never mistaken for `/mnt/pi` or `host:/home/`.
+            let matchesMountPoint = mountPointForms.contains { MountStateParser.commandLine(command, containsArgument: $0) }
+            let matchesSource = expectedSource.map { MountStateParser.commandLine(command, containsArgument: $0) } ?? false
 
             if matchesMountPoint {
                 mountPointMatchedPIDs.append(pid)

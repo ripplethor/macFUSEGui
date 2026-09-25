@@ -848,8 +848,8 @@ actor MountManager {
         skipForceUnmount: Bool = false
     ) async {
         logActorQueueDelay(op: "forceStopProcesses", remote: remote, queuedAt: queuedAt, operationID: operationID)
-        let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
-        let connectionNeedle = "\(remote.username)@\(sshHostArgument(remote.host)):\(remote.remoteDirectory)"
+        let mountPointArguments = MountStateParser.mountPointArgumentForms(remote.localMountPoint)
+        let sourceArguments = Self.sshfsSourceArgumentsForCleanup(for: remote)
         let postStopAction = skipForceUnmount ? "skipping force-unmount by request." : "attempting force-unmount anyway."
 
         do {
@@ -860,7 +860,8 @@ actor MountManager {
             )
 
             if result.exitCode == 0 {
-                var candidatePIDs: [Int32] = []
+                var mountPointMatchedPIDs: [Int32] = []
+                var sourceMatchedPIDs: [Int32] = []
                 for rawLine in result.stdout.split(separator: "\n", omittingEmptySubsequences: true) {
                     let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !line.isEmpty else {
@@ -882,12 +883,19 @@ actor MountManager {
                         continue
                     }
 
-                    // Scope kill list to this remote only (mount path or remote connection needle).
-                    if command.contains(normalizedMountPoint) || command.contains(connectionNeedle) {
-                        candidatePIDs.append(pid)
+                    // Scope the kill list to this remote only. Match whole arguments, never
+                    // substrings: `/mnt/pi` must not hit `/mnt/pi2`, and `host:/home/` must not
+                    // hit another remote's `host:/home/site/`.
+                    if mountPointArguments.contains(where: { MountStateParser.commandLine(command, containsArgument: $0) }) {
+                        mountPointMatchedPIDs.append(pid)
+                    } else if sourceArguments.contains(where: { MountStateParser.commandLine(command, containsArgument: $0) }) {
+                        sourceMatchedPIDs.append(pid)
                     }
                 }
 
+                // The mount point identifies this remote's sshfs; the source argument is only a
+                // fallback, because two remotes may mount the same server path.
+                let candidatePIDs = mountPointMatchedPIDs.isEmpty ? sourceMatchedPIDs : mountPointMatchedPIDs
                 let pids = Array(Set(candidatePIDs)).sorted()
                 if !pids.isEmpty {
                     diagnostics.append(
@@ -952,6 +960,17 @@ actor MountManager {
             remoteName: remote.displayName,
             fast: fastForceUnmount
         )
+    }
+
+    /// Beginner note: The sshfs source argument this build passes, plus the form builds before
+    /// v0.1.36 used (no trailing slash), so mounts started before an app update are still found.
+    nonisolated static func sshfsSourceArgumentsForCleanup(for remote: RemoteConfig) -> Set<String> {
+        let current = MountCommandBuilder.sshfsSourceArgument(for: remote)
+        var arguments: Set<String> = [current]
+        if current.hasSuffix("/"), !current.hasSuffix(":/") {
+            arguments.insert(String(current.dropLast()))
+        }
+        return arguments
     }
 
     /// Beginner note: When force-unmount is intentionally skipped, poll mount-table state

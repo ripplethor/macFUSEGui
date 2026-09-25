@@ -995,6 +995,70 @@ final class MountManagerParallelOperationTests: XCTestCase {
         XCTAssertFalse(log.contains("became visible during post-connect probing"), log)
     }
 
+    // MARK: - Process cleanup scoping (sibling remotes)
+
+    func testCommandLineArgumentMatchingRequiresWholeArguments() {
+        let command = "/opt/homebrew/bin/sshfs -f -p 22 -o volname=Site root@10.0.0.12:/home/site/ /Users/p/MACFUSE-REMOTES/pi2"
+        XCTAssertFalse(MountStateParser.commandLine(command, containsArgument: "root@10.0.0.12:/home/"))
+        XCTAssertTrue(MountStateParser.commandLine(command, containsArgument: "root@10.0.0.12:/home/site/"))
+        XCTAssertFalse(MountStateParser.commandLine(command, containsArgument: "/Users/p/MACFUSE-REMOTES/pi"))
+        XCTAssertTrue(MountStateParser.commandLine(command, containsArgument: "/Users/p/MACFUSE-REMOTES/pi2"))
+        XCTAssertFalse(MountStateParser.commandLine(command, containsArgument: ""))
+
+        let spaced = "/opt/homebrew/bin/sshfs -f dev@host:/srv/ /Users/p/My Mounts/data"
+        XCTAssertTrue(MountStateParser.commandLine(spaced, containsArgument: "/Users/p/My Mounts/data"))
+        XCTAssertFalse(MountStateParser.commandLine(spaced, containsArgument: "/Users/p/My Mounts/dat"))
+    }
+
+    /// Beginner note: Regression for the red-team finding. Cleaning up a remote mounted from
+    /// `root@host:/home/` must not kill sibling mounts of `root@host:/home/<site>/` or mounts whose
+    /// mount point merely starts with the same text.
+    func testForceStopOnlyKillsThisRemotesSSHFSNotSiblings() async throws {
+        let runner = ProcessListingRunner(psListing: """
+          101 /opt/homebrew/bin/sshfs -f -p 22 -o volname=Wordpress root@10.0.0.12:/home/ /Users/p/MACFUSE-REMOTES/WPSites
+          102 /opt/homebrew/bin/sshfs -f -p 22 -o volname=Britannia root@10.0.0.12:/home/britannia.co.uk/ /Users/p/MACFUSE-REMOTES/BritanniaCres
+          103 /opt/homebrew/bin/sshfs -f -p 22 -o volname=Copy root@10.0.0.12:/home/copy/ /Users/p/MACFUSE-REMOTES/WPSites2
+          104 /usr/bin/vim /Users/p/MACFUSE-REMOTES/WPSites/notes.txt
+        """)
+        let manager = makeManager(runner: runner)
+        let remote = RemoteConfig(
+            displayName: "Wordpress Sites",
+            host: "10.0.0.12",
+            username: "root",
+            authMode: .privateKey,
+            privateKeyPath: "/etc/hosts",
+            remoteDirectory: "/home/",
+            localMountPoint: "/Users/p/MACFUSE-REMOTES/WPSites"
+        )
+
+        await manager.forceStopProcesses(for: remote, fastForceUnmount: true)
+
+        let killed = await runner.killedPIDs()
+        XCTAssertEqual(killed, [101], "Only this remote's sshfs may be signalled; got \(killed)")
+    }
+
+    func testForceStopFallsBackToSourceMatchForPreV0136Mounts() async throws {
+        // Builds before v0.1.36 passed the source without a trailing slash.
+        let runner = ProcessListingRunner(psListing: """
+          201 /opt/homebrew/bin/sshfs -p 22 -o volname=Win Administrator@10.0.0.2:/D:/wwwroot /Volumes/other-name
+          202 /opt/homebrew/bin/sshfs -p 22 -o volname=Doris Administrator@10.0.0.2:/D:/wwwroot/admin.site/ /Users/p/MACFUSE-REMOTES/SouthAfrica
+        """)
+        let manager = makeManager(runner: runner)
+        let remote = RemoteConfig(
+            displayName: "westwon.net",
+            host: "10.0.0.2",
+            username: "Administrator",
+            authMode: .password,
+            remoteDirectory: "/D:/wwwroot/",
+            localMountPoint: "/Users/p/MACFUSE-REMOTES/westwonNet"
+        )
+
+        await manager.forceStopProcesses(for: remote, fastForceUnmount: true)
+
+        let killed = await runner.killedPIDs()
+        XCTAssertEqual(killed, [201], "Legacy-source mount should be found, sibling left alone; got \(killed)")
+    }
+
     func testRemovingBenignSSHFSOutputKeepsOutputWhenOnlyNoiseRemains() {
         let onlyNoise = "fuse: forking after mount is not supported"
         XCTAssertEqual(MountManager.removingBenignSSHFSOutput(onlyNoise), onlyNoise)
@@ -1117,6 +1181,44 @@ private final class FakeForegroundSSHFS: DetachedProcess, @unchecked Sendable {
         lock.lock()
         released = true
         lock.unlock()
+    }
+}
+
+/// Beginner note: Returns a fixed `ps` listing and records which pids were signalled.
+private actor ProcessListingRunner: ProcessRunning {
+    private let psListing: String
+    private var killed: [Int32] = []
+
+    init(psListing: String) {
+        self.psListing = psListing
+    }
+
+    func killedPIDs() -> [Int32] {
+        Array(Set(killed)).sorted()
+    }
+
+    func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        timeout: TimeInterval,
+        standardInput: String?
+    ) async throws -> ProcessResult {
+        var stdout = ""
+        if executable == "/bin/ps" {
+            stdout = psListing
+        } else if executable == "/bin/kill", let pid = arguments.last.flatMap({ Int32($0) }) {
+            killed.append(pid)
+        }
+        return ProcessResult(
+            executable: executable,
+            arguments: arguments,
+            stdout: stdout,
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+            duration: 0
+        )
     }
 }
 

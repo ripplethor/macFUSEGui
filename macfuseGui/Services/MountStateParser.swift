@@ -59,6 +59,41 @@ final class MountStateParser {
         return records.first { normalize($0.mountPoint) == normalizedTarget }
     }
 
+    /// Beginner note: True when `argument` appears in a `ps` command line as a whole
+    /// whitespace-delimited argument, not as the prefix of a longer one. Process cleanup must
+    /// not match `/mnt/pi` against `/mnt/pi2`, or `host:/home/` against `host:/home/site/`.
+    static func commandLine(_ commandLine: String, containsArgument argument: String) -> Bool {
+        guard !argument.isEmpty else {
+            return false
+        }
+
+        var searchStart = commandLine.startIndex
+        while searchStart < commandLine.endIndex,
+              let range = commandLine.range(of: argument, range: searchStart..<commandLine.endIndex) {
+            let startsAtBoundary = range.lowerBound == commandLine.startIndex
+                || commandLine[commandLine.index(before: range.lowerBound)].isWhitespace
+            let endsAtBoundary = range.upperBound == commandLine.endIndex
+                || commandLine[range.upperBound].isWhitespace
+            if startsAtBoundary && endsAtBoundary {
+                return true
+            }
+            searchStart = commandLine.index(after: range.lowerBound)
+        }
+        return false
+    }
+
+    /// Beginner note: Forms a mount point can take on an sshfs command line: as saved,
+    /// normalized, and normalized with a trailing slash. Match each with `containsArgument`.
+    static func mountPointArgumentForms(_ mountPoint: String) -> Set<String> {
+        let trimmed = mountPoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = LocalPathNormalizer.normalize(trimmed)
+        var forms: Set<String> = [trimmed, normalized]
+        if !normalized.isEmpty, normalized != "/" {
+            forms.insert("\(normalized)/")
+        }
+        return forms.filter { !$0.isEmpty }
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func normalize(_ path: String) -> String {
         // Keep this lexical-only (no symlink resolution) so status probes avoid filesystem I/O.

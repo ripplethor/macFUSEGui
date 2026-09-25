@@ -105,6 +105,31 @@ final class UnmountServiceTests: XCTestCase {
         }
     }
 
+    /// Beginner note: Regression for the red-team finding. Killing sshfs during a stuck unmount
+    /// must only target this mount, not siblings whose paths merely start with the same text.
+    func testStuckUnmountOnlyKillsThisMountsSSHFS() async throws {
+        let mountPoint = "/tmp/macfusegui-tests/WPSites"
+        let runner = StuckUnmountRunner(
+            mountPoint: mountPoint,
+            mountSource: "root@10.0.0.12:/home/",
+            psListing: """
+              301 /opt/homebrew/bin/sshfs -f -p 22 root@10.0.0.12:/home/ /tmp/macfusegui-tests/WPSites
+              302 /opt/homebrew/bin/sshfs -f -p 22 root@10.0.0.12:/home/site/ /tmp/macfusegui-tests/Site
+              303 /opt/homebrew/bin/sshfs -f -p 22 root@10.0.0.12:/home/copy/ /tmp/macfusegui-tests/WPSites2
+            """
+        )
+        let service = UnmountService(
+            runner: runner,
+            diagnostics: DiagnosticsService(),
+            mountStateParser: MountStateParser()
+        )
+
+        _ = try? await service.unmount(mountPoint: mountPoint)
+
+        let killed = await runner.killedPIDs()
+        XCTAssertEqual(killed, [301], "Only this mount's sshfs may be signalled; got \(killed)")
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     private func makeService() -> UnmountService {
         UnmountService(
@@ -292,5 +317,64 @@ private actor BusyUnmountRunner: ProcessRunning {
 
     func lsofInvocations() -> [[String]] {
         recordedLsofArguments
+    }
+}
+
+/// Beginner note: A mount that never unmounts (non-busy failure), with a fixed `ps` listing.
+private actor StuckUnmountRunner: ProcessRunning {
+    private let mountPoint: String
+    private let mountSource: String
+    private let psListing: String
+    private var killed: [Int32] = []
+
+    init(mountPoint: String, mountSource: String, psListing: String) {
+        self.mountPoint = mountPoint
+        self.mountSource = mountSource
+        self.psListing = psListing
+    }
+
+    func killedPIDs() -> [Int32] {
+        Array(Set(killed)).sorted()
+    }
+
+    func run(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        timeout: TimeInterval,
+        standardInput: String?
+    ) async throws -> ProcessResult {
+        var stdout = ""
+        var stderr = ""
+        var exitCode: Int32 = 0
+        switch executable {
+        case "/bin/df":
+            stdout = """
+            Filesystem 512-blocks Used Available Capacity Mounted on
+            \(mountSource) 1024 128 896 13% \(mountPoint)
+            """
+        case "/sbin/mount":
+            stdout = "\(mountSource) on \(mountPoint) (macfuse, nodev, nosuid, synchronous)"
+        case "/usr/sbin/diskutil", "/sbin/umount":
+            stderr = "Unmount failed: Operation not permitted"
+            exitCode = 1
+        case "/bin/ps":
+            stdout = psListing
+        case "/bin/kill":
+            if let pid = arguments.last.flatMap({ Int32($0) }) {
+                killed.append(pid)
+            }
+        default:
+            break
+        }
+        return ProcessResult(
+            executable: executable,
+            arguments: arguments,
+            stdout: stdout,
+            stderr: stderr,
+            exitCode: exitCode,
+            timedOut: false,
+            duration: 0
+        )
     }
 }

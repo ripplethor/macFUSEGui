@@ -141,9 +141,7 @@ final class MountCommandBuilder {
             args.append(option)
         }
 
-        let sourcePath = normalizedRemotePath.hasSuffix("/") ? normalizedRemotePath : "\(normalizedRemotePath)/"
-        let source = "\(remote.username)@\(sshHostArgument(remote.host)):\(sourcePath)"
-        args.append(source)
+        args.append(Self.sshfsSourceArgument(for: remote))
         args.append(remote.localMountPoint)
 
         let redacted = redactionService.redactedCommand(
@@ -158,6 +156,15 @@ final class MountCommandBuilder {
             environment: passwordEnvironment,
             redactedCommand: redacted
         )
+    }
+
+    /// Beginner note: The positional `user@host:/path/` argument passed to sshfs. The trailing
+    /// slash keeps directory symlinks mounting their target. Process cleanup matches running
+    /// sshfs instances against this exact string, so both must come from here.
+    static func sshfsSourceArgument(for remote: RemoteConfig) -> String {
+        let normalizedRemotePath = BrowserPathNormalizer.normalize(path: remote.remoteDirectory)
+        let sourcePath = normalizedRemotePath.hasSuffix("/") ? normalizedRemotePath : "\(normalizedRemotePath)/"
+        return "\(remote.username)@\(sshHostArgument(remote.host)):\(sourcePath)"
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
