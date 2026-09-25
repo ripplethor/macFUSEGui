@@ -12,7 +12,10 @@ This directory contains the static assets for the `macfuseGui` marketing website
   - FAQ accordion behavior (ARIA-compliant).
   - Copyright year auto-update.
 - `hero-bg.webp`: Local hero background image (Unsplash source, converted to WebP for performance).
+- `macfusegui-hero-960.webp`, `macfusegui-hero-1600.webp`: Responsive app screenshot used by the refreshed home-page hero (`srcset`).
+- `brand-icon.webp`: Brand/app icon used in page headers.
 - `og-image.webp`: Social preview image in WebP format.
+- `favicon/`: Favicons, touch icons, and `site.webmanifest`.
 
 ## Configuration
 
@@ -45,6 +48,8 @@ Build order:
 2. `npm run docs:build-css`
 3. `npm run docs:minify-html`
 4. `npm run docs:check`
+
+> **Caution:** the refreshed home-page hero (`macfusegui-hero-*.webp` screenshot markup) was edited directly in `docs/index.html` and is not yet in `scripts/generate_docs.mjs` / `scripts/docs_content.mjs`. Running `npm run docs:generate` (or `docs:build`) will overwrite it with the older generated hero. Port the hero into the generator before regenerating.
 
 Useful commands from the repo root:
 

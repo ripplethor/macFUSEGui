@@ -12,7 +12,10 @@
 ## Key Features
 
 - Multiple remotes with per-remote connect/disconnect.
+- Favorite remotes (star in the menu popover) pinned to the top of the list.
 - Three auth modes: `SSH Private Key`, `System SSH`, and `Password`.
+- Optional jump host (`ProxyJump`) for Finder mounts and Test Connection.
+- Per-remote cache mode: `Prioritize freshness over speed` (default, `nolocalcaches`) or a faster cached mode for dev/code mounts.
 - Startup duplicate-instance guard (singleton lock + running-app check) to avoid duplicate menu bar icons.
 - Secure persistence:
   - Non-sensitive config in JSON.
@@ -31,7 +34,9 @@
   - Breadcrumb navigation
   - Directories-only table view
   - Sticky cache with reconnect-state banners (no silent blank state)
+  - Host-key verification against `~/.ssh/known_hosts`
 - Diagnostics snapshot + `Copy Diagnostics` menu action.
+- Localized UI: English, German, Spanish, French, Japanese, Korean, Brazilian Portuguese, Simplified Chinese.
 
 ## Dependency Install
 
@@ -52,6 +57,13 @@ Notes:
 - Finder mounts and `Test Connection` support all three auth modes.
 - The built-in remote browser currently supports only `Password` and `SSH Private Key` because it uses libssh2. `System SSH` still works for Finder mounts and `Test Connection`.
 
+### Jump hosts (ProxyJump)
+
+Turn on `Use jump host (ProxyJump)` in the remote editor and enter an OpenSSH ProxyJump value, for example `user@bastion.example.com:22`. Use commas for multi-hop chains; spaces are not allowed.
+
+- Applied to Finder mounts and `Test Connection` in all three auth modes. In `Password` mode it is added inside the pinned `ssh_command`.
+- The built-in browser cannot tunnel through a jump host yet, so `Browse Remote…` is disabled while ProxyJump is active.
+
 ## Install via Homebrew (App)
 
 ```bash
@@ -62,9 +74,13 @@ brew install --cask ripplethor/macfusegui/macfusegui
 The cask requires macOS 13 (Ventura) or later. If Homebrew says the app only runs on Ventura, your Homebrew is older than 5.1.11, which changed how `depends_on macos:` is read. Run `brew update` and try again.
 
 Expected `sshfs` search order:
-1. `/opt/homebrew/bin/sshfs`
-2. `/usr/local/bin/sshfs`
-3. `sshfs` from `$PATH`
+1. Custom sshfs path set in Settings (optional override)
+2. The previously discovered backend (pinned after first successful lookup)
+3. `/opt/homebrew/bin/sshfs`
+4. `/usr/local/bin/sshfs`
+5. `/opt/local/bin/sshfs` (MacPorts)
+6. `/usr/bin/sshfs`
+7. `sshfs` from `$PATH`
 
 ## Open-In-Editor Plugins
 
@@ -198,6 +214,23 @@ ARCH_OVERRIDE=arm64 ./scripts/release.sh
 ARCH_OVERRIDE=x86_64 ./scripts/release.sh
 ```
 
+### Release from Windows (GitHub Actions)
+
+`.github/workflows/release-macos.yml` runs `scripts/release.sh` on a GitHub-hosted macOS runner (`workflow_dispatch`). From a Windows checkout:
+
+```bat
+scripts\release.cmd
+scripts\release.cmd -DryRun
+scripts\release.cmd -Arch arm64 -ReleaseVersion 0.2.0
+```
+
+The wrapper does the following before dispatching the workflow on the current branch:
+- requires a clean work tree
+- checks `origin` reachability and `gh auth status`
+- pushes the current branch
+
+The release workflow does not run the audit or tests, and `xcodebuild` is not available on Windows. Run the reliability gate on a Mac before releasing.
+
 ## Xcode CLI Fallback
 
 ```bash
@@ -253,6 +286,10 @@ Debug launch:
 - Passwords are never stored in JSON or logs.
 - `KeychainService.readPassword` trims leading/trailing whitespace on read — prevents silent auth failures from clipboard-pasted trailing newlines without altering the stored credential.
 - IPv6 host addresses are automatically bracketed (`[::1]`) in sshfs arguments; bare IPv6 input is also rejected at the validation layer.
+- Host keys:
+  - Finder mounts use `StrictHostKeyChecking=accept-new`.
+  - The built-in browser verifies the server key against `~/.ssh/known_hosts` before authenticating. Unknown hosts are trusted on first use and recorded. A changed key is a hard failure that reports the offered SHA256 fingerprint.
+- OpenSSL and libssh2 source tarballs are pinned by SHA256 in `scripts/build_libssh2.sh`. Builds refuse a tarball whose hash does not match.
 - Diagnostics redact sensitive content.
 
 ## Browser Subsystem Notes
@@ -264,6 +301,8 @@ Current transport implementation uses native libssh2 SFTP through a C bridge (`L
 Auth support:
 - `Password` and `SSH Private Key` are supported in the browser today.
 - `System SSH` is not supported in the browser yet; use Finder mounts or `Test Connection` for that mode.
+- Jump hosts (`ProxyJump`) are not tunnelled by the browser yet.
+- Host keys are checked against `~/.ssh/known_hosts` after the SSH handshake and before authentication.
 
 Recovery contract:
 - Keepalive runs every 12s only while the browser session is idle.

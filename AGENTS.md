@@ -8,7 +8,9 @@ Purpose: give future AI agents an accurate mental model of `macfuseGui` so chang
 
 Core user-facing capabilities:
 - Multiple remotes with independent connect/disconnect.
+- Three auth modes (SSH private key, System SSH, password) and optional ProxyJump jump hosts.
 - Passwords in Keychain; config in JSON.
+- Per-remote cache mode (freshness vs speed) and favorite remotes pinned to the top of the menu.
 - Per-remote startup intent (`Auto-connect on app launch`).
 - Recovery after sleep/wake, network restore, and external unmount events.
 - Finder-style remote folder browser (directories-only) with sticky data and auto-recovery.
@@ -42,7 +44,7 @@ Single orchestrator:
 
 Startup (`AppDelegate.applicationDidFinishLaunching`):
 1. App runs in accessory mode (no Dock icon).
-2. Main menu is installed (for Cmd+Q handling).
+2. Main menu is installed: app menu (Cmd+Q) plus a standard `Edit` menu (Undo/Redo/Cut/Copy/Paste/Delete/Select All). Accessory apps get no default menu, so without the `Edit` menu Cmd+C/V/X/A/Z do not work in text fields.
 3. `AppEnvironment` is created.
 4. Menu bar controller is created.
 5. Background startup sequence runs:
@@ -76,10 +78,19 @@ This is intentionally aggressive because stale app/process state previously caus
 
 `RemoteConfig` (`macfuseGui/Models/RemoteConfig.swift`):
 - `id`, `displayName`, `host`, `port`, `username`
-- `authMode` (`.password` / `.privateKey`), `privateKeyPath`
+- `authMode` (`RemoteAuth`: `.privateKey` / `.systemSSH` / `.password`), `privateKeyPath`
+- `proxyJumpEnabled`, `proxyJump` (OpenSSH ProxyJump spec; Finder mounts + Test Connection only)
 - `remoteDirectory`, `localMountPoint`
+- `isFavorite` (pins the remote to the top of lists; see §9)
 - `autoConnectOnLaunch`
+- `disableLocalCaches` (default `true`; see §6 cache modes)
 - `favoriteRemoteDirectories`, `recentRemoteDirectories`
+
+`RemoteAuth` (`macfuseGui/Models/RemoteAuth.swift`):
+- Case order is the picker display order: `privateKey`, `systemSSH`, `password`.
+- `.privateKey`: requires an absolute key path; appends `IdentityFile=...`.
+- `.systemSSH`: no explicit key; OpenSSH resolves auth from agent, `~/.ssh/config`, Tailscale SSH, etc.
+- `.password`: requires a stored or draft password; auth is pinned (see §6).
 
 `RemoteDraft`:
 - Editor-only mutable model.
@@ -95,6 +106,7 @@ Browser models:
 
 Backward compatibility:
 - `RemoteConfig` decodes missing newer fields with defaults so legacy `remotes.json` files keep loading.
+- Notable defaults: `authMode` → `.privateKey`, `proxyJumpEnabled` → `false`, `isFavorite` → `false`, `disableLocalCaches` → `true`, `remoteDirectory` → `/`.
 
 ## 5) Persistence and Security
 
@@ -130,7 +142,14 @@ Main files:
 - `macfuseGui/Services/MountStateParser.swift`
 
 Connect flow highlights:
-- Dependency gate (`sshfs`, macFUSE, ssh, sftp).
+- Dependency gate (`sshfs`, macFUSE at `/Library/Filesystems/macfuse.fs`, `/usr/bin/ssh`, `/usr/bin/sftp`).
+- sshfs backend resolution (`DependencyChecker`):
+  1. User override path from Settings (`mount.backend.sshfs.override_path`)
+  2. Previously pinned backend (`mount.backend.sshfs.pinned_path` / `pinned_source`)
+  3. `/opt/homebrew/bin/sshfs`, `/usr/local/bin/sshfs`, `/opt/local/bin/sshfs` (MacPorts), `/usr/bin/sshfs`
+  4. Absolute `$PATH` segments
+  - The first executable hit is pinned in `UserDefaults` for later launches.
+- `SSHFSCapabilities.detect` runs `sshfs -h` once per binary path (cached in `MountManager`) to pick supported cache options.
 - Pre-connect cleanup if mountpoint already mounted.
 - Auto-create missing local mount folder.
 - Retry once for transient failures (`resource busy`, reset/timeout/network-type failures).
@@ -154,10 +173,22 @@ Busy unmount UX:
 
 Mount inspection anti-flap logic (important):
 - `refreshStatus` does not immediately downgrade a previously-connected mount on one probe miss.
-- Uses responsive path check (`stat`) + `df` fallback + brief retry before declaring disconnect.
+- Uses `df` fallback + responsive path check (`stat`) + brief (250ms) retry before declaring disconnect.
+- If the mount is missing from the mount table but the path is still responsive, connected state is preserved for up to `maxConnectedPreserveMisses = 4` consecutive checks, then status becomes `error` ("Mount could not be verified") so reconnect performs cleanup.
+- If the refresh task is cancelled (routine supersession during recovery bursts), `refreshStatus` returns the cached status instead of synthesizing an error from `CancellationError`.
 - This avoids false reconnect storms from transient mount table probe failures.
 
 Command builder nuances:
+- Base options: `reconnect`, `ServerAliveInterval=15`, `ServerAliveCountMax=3`, `defer_permissions`, `auto_cache`, `StrictHostKeyChecking=accept-new`, `ConnectTimeout=10`, `volname=...`.
+- Do not add `noappledouble` / `noapplexattr`. They were removed in v0.1.36 because they broke Finder and `cp` copies that need the AppleDouble/xattr fallback.
+- Cache modes (per remote `disableLocalCaches`, editor label `Prioritize freshness over speed`):
+  - `true` (default): `nolocalcaches`.
+  - `false` (fast mode): `attr_timeout`/`entry_timeout`/`cache_timeout=120`, `cache_max_size=50000`, plus `dir_cache=yes` + `dcache_*` (newer sshfs) or `cache_stat/dir/link_timeout` (older sshfs), depending on detected `SSHFSCapabilities`.
+- The sshfs source path always ends in `/` (`user@host:/path/`) so a remote directory that is a symlink mounts its target directory rather than the link itself.
+- ProxyJump (when `proxyJumpEnabled` and non-empty):
+  - `.privateKey` / `.systemSSH`: added as `-o ProxyJump=...`.
+  - `.password`: appended inside the pinned `ssh_command=...` string.
+  - `ValidationService` rejects empty values, control characters, and whitespace (multi-hop uses commas).
 - Windows path normalization for sshfs source path.
 - Stable `volname` derivation from display name + remote path leaf.
 - Password mode now disables public-key fallback and prefers password-style auth
@@ -188,6 +219,8 @@ Key structures:
   - `skipIfBusy`
 - `remoteOperations: [UUID: RemoteOperationState]`
 - `OperationLimiter(maxConcurrent: 4)` for cross-remote cap
+  - `acquire()` is `async throws` and cancellation-aware: a task cancelled while queued is removed from the FIFO and resumed with `CancellationError`, so superseded operations do not delay the ones behind them.
+  - `runOperation` bails out on that error without registering a `release()` for a slot it never held.
 
 Behavior contract:
 - At most one active operation per remote.
@@ -202,6 +235,11 @@ Timeout/watchdog defaults:
 - Disconnect watchdog: `10s`
 - Refresh watchdog: `18s`
 - Connect inner timeout path: `35s`
+- Disconnect inner timeout path: `8s`
+- sshfs connect command timeout: `20s`
+- Unmount total / per-command cap: `10s` / `3s`
+
+Most of these live in `RuntimeConfiguration` (`macfuseGui/App/AppEnvironment.swift`), which also holds the 15s periodic recovery interval, the 60s healthy-probe interval, and the browser circuit-breaker threshold and window. The inner connect/disconnect timeouts are constants in `RemotesViewModel`.
 
 Diagnostics logs every operation start/end/cancel/timeout with:
 - `remoteID`, `operationID`, `intent`, `trigger`, elapsed ms, cancellation/supersession details.
@@ -237,6 +275,14 @@ Recovery burst schedules:
 - Wake: `[0s, 1s, 3s, 8s]`
 - Network restored: `[0s, 2s, 6s]`
 
+Event handling details:
+- Wake: `handleSystemDidWake` stores a single `wakePreflightTask`, cancelling any earlier one first. It runs a parallel fast force-unmount of desired remotes (`performWakePreflightCleanup`), then schedules the wake burst.
+  - While `wakePreflightInProgress` is set, external-unmount notifications are ignored.
+- Network lost: debounce `0.5s`, cancel scheduled reconnects and any recovery burst, then run fast cleanup in `networkLossCleanupTask`.
+- Network restored: debounce `1.5s`, cancel pending network-loss cleanup, run deferred startup auto-connect first, then schedule the network-restored burst.
+- External unmount: ignored for remotes not in `desiredConnections`, during wake preflight, or while a connect/disconnect is active. Otherwise the remote is marked disconnected and `scheduleAutoReconnect` runs.
+- Sleep, termination, and deinit cancel `wakePreflightTask`, `networkLossCleanupTask`, and bursts.
+
 Periodic skip optimization:
 - If all desired remotes are healthy, no in-flight reconnects, and last periodic full probe was recent, periodic deep probe is skipped.
 - `healthyPeriodicProbeInterval = 60s`
@@ -271,20 +317,32 @@ Tooltip includes:
 - Recovery reason/pending/queued
 - Aggregate C/A/E/D counts
 
+Favorite remotes:
+- Each remote row in the menu popover has a star toggle (`RemotesViewModel.toggleFavorite`) that persists `RemoteConfig.isFavorite`.
+- `RemotesViewModel.sortedRemotes` orders favorites first, then by display name (case-insensitive), then by UUID for stability.
+- Not to be confused with `favoriteRemoteDirectories`, which are per-remote browser path favorites (§15).
+
 ## 10) Settings, Editor, and UX Nuances
 
 Settings window:
 - Explicit open only from menu action.
 - Shows launch-at-login state, including approval/fallback details.
+- Optional custom sshfs path override field (see §6 backend resolution).
 - Includes entry point button that opens a dedicated `Editor Plugins` window.
+- `BaseSettingsWindowController` uses `NSHostingController.sizingOptions = [.minSize, .maxSize]`.
+  - Do not add `.preferredContentSize`. Binding SwiftUI's preferred size back into AppKit constraints caused the settings window sizing bug on macOS betas.
+  - Size windows from SwiftUI `.frame(min…/ideal…/max…)`, not hardcoded pixel sizes.
 
 Remote detail panel:
 - Edit, Duplicate, Delete, Refresh, Connect, Disconnect.
 - Connect/Disconnect buttons are state-aware and disabled appropriately.
 
 Editor (`RemoteEditorView`):
-- Add/Edit title, password eye toggle, auth mode switch.
+- Add/Edit title, password eye toggle, auth mode picker (SSH Private Key / System SSH / Password).
 - `Auto-connect on app launch` toggle.
+- `Prioritize freshness over speed` toggle (`disableLocalCaches`; on by default, turn off for faster dev/code mounts).
+- `Use jump host (ProxyJump)` toggle + value field.
+- `Browse Remote…` is disabled for `System SSH` and when ProxyJump is active, with an inline callout explaining why (see §12 auth support).
 - `Test Connection` button with in-place progress/result.
 - Both Cancel button and top-right close icon are present.
 - Remote browser opens in sheet; session closed on sheet dismiss.
@@ -294,6 +352,13 @@ Validation + uniqueness:
 - Display name unique (case-insensitive).
 - Local mountpoint unique (normalized, case-insensitive).
 - Remote path supports UNIX and Windows drive forms.
+- Validation is lexical only. Do not add `fileExists` / `isReadableFile` probes, because they can block the main actor on stale FUSE paths. `MountManager` does bounded filesystem checks during connect/test.
+
+Localization:
+- User-facing strings go through `L10n.tr` / `L10n.format` (`macfuseGui/App/L10n.swift`) backed by `macfuseGui/Resources/Localizable.xcstrings`.
+- Development region `en`. Shipped locales: `de`, `es`, `fr`, `ja`, `ko`, `pt-BR`, `zh-Hans`.
+- Diagnostics log messages and raw external command output stay unlocalized so support data is stable.
+- Translation rules: `docs/LOCALIZATION_GLOSSARY.md`. `LocalizationTests` checks declared locales and core translated keys.
 
 ## 11) Open-In-Editor Plugin Flow
 
@@ -372,6 +437,19 @@ Transport details:
 - Ping timeout: `2s`
 - On list failure, transport invalidates session and retries once by reopening.
 - Swift transport calls remain serialized on one bridge queue, but each C call is deadline-bounded and returns on timeout.
+
+Auth support:
+- Browser supports `.password` and `.privateKey` only.
+- `.systemSSH` is rejected in `LibSSH2SFTPTransport` because libssh2 cannot use the OpenSSH agent/config resolution.
+- ProxyJump is not tunnelled by libssh2. The editor disables `Browse Remote…` when ProxyJump is active.
+
+Host-key verification (`macfusegui_verify_host_key` in `LibSSH2Bridge.c`):
+- Runs after the SSH handshake and before any authentication.
+- Checks the server key against `~/.ssh/known_hosts` (`[host]:port` form for non-22 ports).
+- Match: proceed.
+- Mismatch: hard failure with the offered key's SHA256 fingerprint and a possible-MITM warning.
+- Not found: trust on first use. The key is added and written back to `~/.ssh/known_hosts`, creating `~/.ssh` if needed. This matches the `StrictHostKeyChecking=accept-new` policy used by sshfs mounts.
+- A missing `known_hosts` file is treated as empty (trust on first use). Any other read failure, a write failure, or an unsupported key type is a hard error. It never silently skips verification.
 
 C bridge reliability details:
 - Non-blocking connect with select-based timeout.
@@ -476,7 +554,7 @@ Diagnostics snapshot includes:
 - `Browser Sessions` section (health, retries, path, latency, last success)
 
 Expected categories:
-- `store`, `mount`, `unmount`, `recovery`, `operations`, `remote-browser`, `startup`, `editor`, `vscode`, `diagnostics`, `app`
+- `store`, `mount`, `mount-test`, `unmount`, `recovery`, `operations`, `remote-browser`, `startup`, `editor`, `vscode`, `diagnostics`, `app`
 
 No secrets in diagnostics:
 - Askpass and passwords are redacted or omitted.
@@ -507,6 +585,10 @@ libssh2 prep:
 - `scripts/build_libssh2.sh` builds OpenSSL and libssh2 from source for the active arch/deployment target
 - Single-arch `x86_64` third-party builds run under Rosetta on Apple Silicon (`arch -x86_64`)
 - Source tarballs are cached under `third_party/src` (`openssl-<version>.tar.gz`, `libssh2-<version>.tar.gz`) and auto-downloaded if missing
+- Tarballs are pinned by SHA256 (`OPENSSL_SHA256` / `LIBSSH2_SHA256` in `scripts/build_libssh2.sh`, overridable via env).
+  - Both cached and freshly downloaded tarballs are verified.
+  - On mismatch the tarball is deleted and the build aborts.
+  - When bumping `OPENSSL_VERSION` or `LIBSSH2_VERSION`, update the matching hash in the same change.
 - Build artifacts are cached by a fingerprint (`version`, `arch`, `min target`) so repeated builds are fast
 - `scripts/build.sh` also updates compatibility symlinks:
   - `build/third_party/openssl` -> selected `openssl-<arch>`
@@ -522,6 +604,13 @@ App output:
   - `build/DerivedData-x86_64`
   - `build/DerivedData-universal`
 
+Release automation:
+- `scripts/release.sh` is the single source of truth for versioning, DMG creation, Homebrew cask update, release notes, tags, and GitHub Release publishing.
+- `.github/workflows/release-macos.yml` (`workflow_dispatch`, `macos-26` runner) runs `scripts/release.sh`, passing arch, configuration, version, dry-run, and packaging options as env/args.
+- Windows entry point: `scripts\release.cmd` → `scripts/release.ps1`. It requires a clean work tree and a non-detached branch, checks origin reachability and `gh auth status`, pushes the current branch, then dispatches `release-macos.yml` on that ref.
+  - Supports `-Arch`, `-ReleaseVersion`, `-DryRun`, `-SkipBuild`, `-NoHomebrewCask`, and related options.
+- Neither the workflow nor `scripts/release.sh` runs `audit_mount_calls.py` or the XCTest suite, and `xcodebuild` is not available on Windows. Run the reliability gate on a Mac before dispatching a release.
+
 Tests:
 - `ARCH_OVERRIDE=arm64 ./scripts/build.sh` then `xcodebuild ... test CODE_SIGNING_ALLOWED=NO`
 - Reliability gate: `ARCH_OVERRIDE=arm64 ./scripts/build.sh && scripts/audit_mount_calls.py && xcodebuild -project macfuseGui.xcodeproj -scheme macfuseGui -configuration Debug -derivedDataPath build/DerivedData -destination 'platform=macOS,arch=arm64' test CODE_SIGNING_ALLOWED=NO`
@@ -533,6 +622,13 @@ Tests:
   - Keepalive-triggered recovery
   - Unmount blocker parsing
   - Mount arg safety and Windows path normalization
+  - Auth-mode and ProxyJump arg building, trailing-slash source path, capability-based cache options (`MountArgBuilderTests`)
+  - ProxyJump, IPv6, and auth validation rules (`ValidationServiceTests`)
+  - `OperationLimiter` cancellation and wake-preflight dedup (`RemotesViewModelHelpersTests`)
+  - Recovery flows (`RemotesViewModelRecoveryTests`)
+  - Cancelled refresh preserving cached status and mount-detection edge cases (`ProcessRunnerTests`)
+  - LaunchAgent fallback bootstrap/verification failures (`LaunchAtLoginServiceTests`)
+  - Localization catalog locales and core keys (`LocalizationTests`)
 
 ## 19) Clever/Non-Obvious Safeguards to Preserve
 
@@ -550,8 +646,14 @@ Tests:
 12. ProcessRunner capture shutdown before terminate/SIGKILL to avoid post-timeout stdout/stderr races.
 13. `KeychainService.readPassword` trims whitespace before returning — prevents silent auth failures from clipboard-pasted trailing newlines without changing the stored credential.
 14. `sshHostArgument()` brackets IPv6 host addresses in both the sshfs source arg and the connection-needle process search — prevents ambiguous `user@::1:/path` colons from breaking sshfs and process matching.
-15. `if !Task.isCancelled` guards in `scheduleRecoveryBurst` and `scheduleAutoReconnect` defer blocks — prevents a cancelled task's cleanup from clobbering the replacement task's reference on the next main-actor turn.
-16. Foreground `sshfs -f` launched in its own session with process-group cleanup — works with macFUSE 5.4+ (no fork after mount), keeps mounts alive after the app quits, and never leaves orphaned mount helpers.
+15. `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst`, `scheduleAutoReconnect`, `wakePreflightTask`, and `networkLossCleanupTask` — prevents a cancelled task's cleanup from clobbering the replacement task's reference on the next main-actor turn.
+16. Cancellation-aware `OperationLimiter.acquire()` — cancelled waiters leave the FIFO immediately instead of delaying later operations.
+17. Cancelled `refreshStatus` returns the cached status — superseded recovery refreshes never flash a synthetic error chip.
+18. Password-mode auth pinning inside `ssh_command=/usr/bin/ssh -o ...` — a wrong password cannot silently succeed via key/agent fallback.
+19. Trailing `/` on the sshfs source path — directory symlinks mount their target, not the link.
+20. Browser host-key verification against `~/.ssh/known_hosts` before authentication (trust-on-first-use, hard fail on mismatch).
+21. SHA256-pinned OpenSSL/libssh2 source tarballs — builds refuse unexpected inputs.
+22. Foreground `sshfs -f` launched in its own session with process-group cleanup — works with macFUSE 5.4+ (no fork after mount), keeps mounts alive after the app quits, and never leaves orphaned mount helpers.
 
 ## 20) Safe-Change Rules for Future Agents
 
@@ -574,7 +676,15 @@ Tests:
 17. Preserve preferred-plugin + fallback semantics and Finder fallback on complete editor-open failure.
 18. Keep `KeychainService.readPassword` trimming — do not return the raw stored value with surrounding whitespace intact.
 19. Keep `sshHostArgument()` wrapping in `MountCommandBuilder.build` and `MountManager.forceStopProcesses` — do not interpolate `remote.host` directly into `user@host:path` strings.
-20. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect` — removing them reintroduces the stale-defer clobber of replacement task references.
+20. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst`, `scheduleAutoReconnect`, `wakePreflightTask`, and `networkLossCleanupTask` — removing them reintroduces the stale-defer clobber of replacement task references.
 21. When taking fixes from an external PR, preserve contributor attribution in commit bodies, release notes, and PR comments. Do not call Xcode-generated `.xcstrings` or `.pbxproj` changes "churn"; Xcode 15+ can rewrite those files as normal project metadata.
-22. Keep `-f` in `MountCommandBuilder` and launch sshfs through `ProcessRunning.launchDetached`. Do not go back to waiting for sshfs to exit, and do not run the mount through Foundation `Process`: the child would share the app's process group, where launchd's job cleanup can kill it.
-23. Only signal a detached process group while its leader is unreaped (`SpawnedDetachedProcess.exitState` uses `WNOWAIT`), so a reused PID is never signalled.
+22. Keep password-mode auth controls inside `ssh_command=...`; do not move them to raw `-o PubkeyAuthentication=...` mount options (the Homebrew sshfs build rejects them).
+23. Do not re-add `noappledouble` / `noapplexattr` to base mount options; they break Finder/`cp` copies.
+24. Keep the trailing `/` on the sshfs source path.
+25. Keep browser host-key verification before authentication; never skip it on read/write errors.
+26. Keep SHA256 pinning in `scripts/build_libssh2.sh`; update the hash whenever the OpenSSL or libssh2 version changes.
+27. Keep `OperationLimiter.acquire()` cancellation-aware and do not `release()` a slot that was never acquired.
+28. Keep `ValidationService` lexical-only; no synchronous filesystem probes on the main actor.
+29. Route new user-facing strings through `L10n`; keep diagnostics log messages unlocalized.
+30. Keep `-f` in `MountCommandBuilder` and launch sshfs through `ProcessRunning.launchDetached`. Do not go back to waiting for sshfs to exit, and do not run the mount through Foundation `Process`: the child would share the app's process group, where launchd's job cleanup can kill it.
+31. Only signal a detached process group while its leader is unreaped (`SpawnedDetachedProcess.exitState` uses `WNOWAIT`), so a reused PID is never signalled.

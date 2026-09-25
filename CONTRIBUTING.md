@@ -45,9 +45,12 @@ Treat these as sensitive:
 - `RemotesViewModel` operation supervision logic
 - `MountManager` connect/disconnect/refresh behavior
 - `UnmountService` timeout and cleanup behavior
+- `MountCommandBuilder` auth-mode arguments (password pinning via `ssh_command`, ProxyJump, cache options)
 - `KeychainService` password read/write behavior (trimming policy, cache coherence)
 - Browser session actors and request-ordering logic
+- `LibSSH2Bridge.c` host-key verification and deadline-bounded calls
 - App startup/quit lifecycle in `AppDelegate`
+- `scripts/build_libssh2.sh` SHA256 pins (update them with any OpenSSL/libssh2 version bump)
 
 ## 5) Safety Rules
 
@@ -61,7 +64,11 @@ Do not break these rules:
 7. Preserve browser sticky-cache and empty-confirm behavior.
 8. Keep `KeychainService.readPassword` whitespace trimming — do not return the raw stored value.
 9. Keep `sshHostArgument()` wrapping in `MountCommandBuilder` and `MountManager` — do not interpolate `remote.host` directly into `user@host:path` strings.
-10. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst` and `scheduleAutoReconnect`.
+10. Keep `if !Task.isCancelled` guards in the defer blocks of `scheduleRecoveryBurst`, `scheduleAutoReconnect`, `wakePreflightTask`, and `networkLossCleanupTask`.
+11. Keep browser host-key verification before authentication.
+12. Route new user-facing strings through `L10n`; keep diagnostics log messages in English.
+
+See `AGENTS.md` §20 for the full list.
 
 ## 6) PR Review and Attribution
 

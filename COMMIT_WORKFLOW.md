@@ -62,14 +62,14 @@ fix: concise description of what was wrong and what was fixed
 Paragraph explaining the root cause and the concrete failure scenario.
 Second paragraph if needed for additional context or edge cases.
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Co-Authored-By: Claude <Model Name> <noreply@anthropic.com>
 ```
 
 Rules:
 - Subject line: imperative mood, ≤ 72 characters, no trailing period
 - Blank line between subject and body
 - Body: explain *why* the change was needed, not *what* lines changed
-- Always append the `Co-Authored-By` trailer
+- Always append the `Co-Authored-By` trailer, naming the model that actually authored the change (e.g. `Claude Opus 4.7`)
 
 ---
 
@@ -118,7 +118,7 @@ readPassword returned the raw stored value even after trimming it to check for
 blank-only passwords. A password pasted with a trailing newline was returned
 with that whitespace intact, causing silent SSH authentication failures.
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Co-Authored-By: Claude <Model Name> <noreply@anthropic.com>
 EOF
 )"
 ```

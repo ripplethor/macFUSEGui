@@ -63,6 +63,7 @@ One active operation per remote ID:
 Cross-remote concurrency:
 - Allowed in parallel.
 - Bounded by `OperationLimiter(maxConcurrent: 4)`.
+- Waiting in the limiter is cancellation-aware: a superseded operation leaves the queue immediately instead of delaying the ones behind it.
 
 Conflict policy:
 - Manual actions use `latestIntentWins`.
@@ -82,6 +83,17 @@ Watchdogs:
 4. Calls `MountManager.connect` with timeout guard.
 5. Applies final state (`connected` or `error`).
 
+`MountCommandBuilder` turns a `RemoteConfig` into sshfs arguments:
+- Auth mode:
+  - `SSH Private Key` → `IdentityFile=...`
+  - `System SSH` → no key; OpenSSH agent/config decides
+  - `Password` → auth pinned inside `ssh_command=/usr/bin/ssh -o ...`
+- Optional `ProxyJump`.
+- Cache mode:
+  - `nolocalcaches` by default
+  - timed metadata caches when freshness is turned off, using `sshfs -h` capability detection
+- The source path always ends in `/`, so symlinked remote directories mount their target.
+
 ### Disconnect
 `RemotesViewModel.performDisconnect`:
 1. Removes remote from `desiredConnections`.
@@ -96,6 +108,8 @@ Watchdogs:
 - responsiveness probe (`stat`)
 - fallback `df` probe
 - brief retry before downgrade
+
+If the mount is missing from the mount table but the path still responds, `connected` is kept for up to 4 consecutive misses before the remote is marked `error` for cleanup and reconnect. A cancelled refresh returns the last cached status rather than an error.
 
 This prevents false dropouts and reconnect storms from single probe misses.
 
@@ -132,7 +146,14 @@ Burst retries:
 - wake: `0s, 1s, 3s, 8s`
 - network restore: `0s, 2s, 6s`
 
+Before the bursts:
+- Wake runs one deduplicated preflight cleanup (parallel fast force-unmount of desired remotes). External-unmount events are ignored while it runs.
+- Network loss cancels pending reconnects and runs a fast cleanup after a 0.5s debounce.
+- Network restore waits 1.5s, then runs any deferred startup auto-connect before its burst.
+
 Periodic deep checks are skipped when all desired remotes are stable.
+
+Timing thresholds (watchdogs, periodic intervals, unmount caps, browser circuit breaker) are centralized in `RuntimeConfiguration` in `macfuseGui/App/AppEnvironment.swift`.
 
 ## 8) Browser Architecture
 
@@ -148,6 +169,10 @@ Reliability contract:
 - stale cache is shown during reconnect windows
 - empty folder is confirmation-checked before treated as true empty
 - stale request responses are dropped by monotonic request ID
+
+Security and auth:
+- After the SSH handshake and before authentication, the C bridge checks the host key against `~/.ssh/known_hosts`. Unknown hosts are trusted on first use and recorded; a mismatch is a hard failure.
+- Only `Password` and `SSH Private Key` auth are supported. `System SSH` and `ProxyJump` remotes cannot use the browser yet.
 
 ## 9) Persistence and Security
 
