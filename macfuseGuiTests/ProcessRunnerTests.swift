@@ -789,6 +789,158 @@ final class MountManagerParallelOperationTests: XCTestCase {
 
     // MARK: - Detached (foreground sshfs) processes
 
+    func testStalledMountPointRepairResetsOnlyEmptyLocalDirectory() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount with spaces")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false,
+                                                attributes: [.posixPermissions: 0o700])
+        let outcome = await MountPointRecovery.resetEmptyDirectory(
+            mountPoint: mountPoint.path, runner: ProcessRunner(), diagnostics: DiagnosticsService()
+        )
+        XCTAssertEqual(outcome, .reset)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: mountPoint.path).isEmpty)
+        let mode = try FileManager.default.attributesOfItem(atPath: mountPoint.path)[.posixPermissions] as? NSNumber
+        XCTAssertEqual(mode?.intValue, 0o700)
+    }
+
+    func testStalledMountPointRepairLeavesLocalContentsUntouched() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false)
+        let contents = Data("local data must survive".utf8)
+        try contents.write(to: mountPoint.appendingPathComponent(".remember"))
+        let outcome = await MountPointRecovery.resetEmptyDirectory(
+            mountPoint: mountPoint.path, runner: ProcessRunner(), diagnostics: DiagnosticsService()
+        )
+        XCTAssertEqual(outcome, .containsLocalFiles)
+        XCTAssertEqual(try Data(contentsOf: mountPoint.appendingPathComponent(".remember")), contents)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), ["mount"])
+    }
+
+    func testStalledMountPointRepairDoesNotDeleteFilesAppearingAfterEmptyCheck() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false)
+        let outcome = await MountPointRecovery.resetEmptyDirectory(
+            mountPoint: mountPoint.path, runner: DirectoryResetRaceRunner(), diagnostics: DiagnosticsService()
+        )
+        XCTAssertEqual(outcome, .unsafe)
+        XCTAssertEqual(try Data(contentsOf: mountPoint.appendingPathComponent("late-write")), Data("keep".utf8))
+    }
+
+    func testCancelledDirectoryRepairLeavesDirectoryUntouched() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false)
+        let inode = try FileManager.default.attributesOfItem(atPath: mountPoint.path)[.systemFileNumber] as? NSNumber
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await MountPointRecovery.resetEmptyDirectory(
+                mountPoint: mountPoint.path, runner: ProcessRunner(), diagnostics: DiagnosticsService()
+            )
+        }
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .unsafe)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: mountPoint.path)[.systemFileNumber] as? NSNumber, inode)
+    }
+
+    func testStalledMountPointRepairRefusesSymlinkAndHomeDirectory() async throws {
+        let root = try makeRepairTestDirectory()
+        let target = root.appendingPathComponent("target")
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        for path in [link.path, link.appendingPathComponent("child").path,
+                     FileManager.default.homeDirectoryForCurrentUser.path] {
+            let outcome = await MountPointRecovery.resetEmptyDirectory(
+                mountPoint: path, runner: ProcessRunner(), diagnostics: DiagnosticsService()
+            )
+            XCTAssertEqual(outcome, .unsafe)
+        }
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), target.path)
+    }
+
+    func testStalledMountPointRepairRefusesActiveMount() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false)
+        let inode = try FileManager.default.attributesOfItem(atPath: mountPoint.path)[.systemFileNumber] as? NSNumber
+        let runner = FakeMountRunner(connectDelayByMountPoint: [:])
+        await runner.simulateExternalMount(mountPoint: mountPoint.path)
+        let outcome = await MountPointRecovery.resetEmptyDirectory(
+            mountPoint: mountPoint.path, runner: runner, diagnostics: DiagnosticsService()
+        )
+        XCTAssertEqual(outcome, .unsafe)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: mountPoint.path)[.systemFileNumber] as? NSNumber, inode)
+    }
+
+    func testSilentStallWithLocalFilesReportsActionableErrorWithoutChangingFiles() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false)
+        let contents = Data("keep".utf8)
+        try contents.write(to: mountPoint.appendingPathComponent(".remember"))
+        let runner = FakeMountRunner(connectDelayByMountPoint: [:], foregroundSSHFS: .hangs)
+        let manager = makeManager(runner: runner, sshfsConnectCommandTimeout: 0.1)
+        let remote = makeRemote(name: "Local files", mountPoint: mountPoint.path)
+        let status = await manager.connect(remote: remote, password: nil)
+        XCTAssertEqual(status.state, .error)
+        XCTAssertEqual(status.lastError, MountPointRecovery.localFilesMessage(mountPoint: mountPoint.path))
+        XCTAssertEqual(try Data(contentsOf: mountPoint.appendingPathComponent(".remember")), contents)
+        let launched = await runner.launchedForegroundSSHFS
+        XCTAssertEqual(launched.count, 1)
+        XCTAssertEqual(launched.first?.wasTerminated, true)
+    }
+
+    private func makeRepairTestDirectory() throws -> URL {
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Caches/macfuseGui-repair-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        return root
+    }
+
+    func testSilentSSHFSStallRepairsMountPointAndRetriesOnce() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: false)
+        let runner = FakeMountRunner(
+            connectDelayByMountPoint: [:], foregroundSSHFS: .hangs,
+            foregroundSSHFSSchedule: [.hangs, .mountsAfter(0)]
+        )
+        let manager = makeManager(runner: runner, sshfsConnectCommandTimeout: 0.1)
+        let remote = makeRemote(name: "Stalled", mountPoint: mountPoint.path)
+
+        let status = await manager.connect(remote: remote, password: nil)
+
+        XCTAssertEqual(status.state, .connected, status.lastError ?? "-")
+        let launched = await runner.launchedForegroundSSHFS
+        XCTAssertEqual(launched.count, 2)
+        XCTAssertEqual(launched.first?.wasTerminated, true)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), ["mount"])
+    }
+
+    func testRepeatedSilentSSHFSStallsDoNotRepeatedlyResetDirectory() async throws {
+        let root = try makeRepairTestDirectory()
+        let mountPoint = root.appendingPathComponent("mount")
+        let runner = FakeMountRunner(connectDelayByMountPoint: [:], foregroundSSHFS: .hangs)
+        let manager = makeManager(runner: runner, sshfsConnectCommandTimeout: 0.1)
+        let remote = makeRemote(name: "Offline", mountPoint: mountPoint.path)
+        var inodeAfterFirstReset: NSNumber?
+        for attempt in 0..<2 {
+            let status = await manager.connect(remote: remote, password: nil)
+            XCTAssertEqual(status.state, .error)
+            XCTAssertTrue(status.lastError?.contains("timed out") == true)
+            let inode = try FileManager.default.attributesOfItem(atPath: mountPoint.path)[.systemFileNumber] as? NSNumber
+            if attempt == 0 { inodeAfterFirstReset = inode }
+            else { XCTAssertEqual(inode, inodeAfterFirstReset) }
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), ["mount"])
+        let launched = await runner.launchedForegroundSSHFS
+        XCTAssertEqual(launched.count, 3, "Only the first stall should receive a repair retry.")
+        XCTAssertTrue(launched.allSatisfy(\.wasTerminated))
+    }
+
     func testLaunchDetachedStartsChildInItsOwnSessionAndTerminateStopsIt() async throws {
         let runner = ProcessRunner()
         let process = try await runner.launchDetached(
@@ -1123,6 +1275,22 @@ final class MountManagerParallelOperationTests: XCTestCase {
     }
 }
 
+/// Simulates a local writer racing the empty-directory check; the real rmdir must refuse it.
+private struct DirectoryResetRaceRunner: ProcessRunning {
+    func run(
+        executable: String, arguments: [String], environment: [String: String],
+        timeout: TimeInterval, standardInput: String?
+    ) async throws -> ProcessResult {
+        if executable == "/bin/rmdir", let path = arguments.first {
+            try Data("keep".utf8).write(to: URL(fileURLWithPath: path).appendingPathComponent("late-write"))
+        }
+        return try await ProcessRunner().run(
+            executable: executable, arguments: arguments, environment: environment,
+            timeout: timeout, standardInput: standardInput
+        )
+    }
+}
+
 /// Beginner note: Stands in for `sshfs -f`: it keeps "running" after the mount appears, like
 /// sshfs under macFUSE 5.4+, until the caller releases or terminates it.
 private final class FakeForegroundSSHFS: DetachedProcess, @unchecked Sendable {
@@ -1249,6 +1417,7 @@ private actor FakeMountRunner: ProcessRunning {
     private let unmountVisibilityDelayByMountPoint: [String: TimeInterval]
     private let forceUnparseableMountOutput: Bool
     private let foregroundSSHFS: FakeForegroundSSHFS.Behavior?
+    private var foregroundSSHFSSchedule: [FakeForegroundSSHFS.Behavior]
     private(set) var launchedForegroundSSHFS: [FakeForegroundSSHFS] = []
 
     init(
@@ -1263,7 +1432,8 @@ private actor FakeMountRunner: ProcessRunning {
         dfVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
         unmountVisibilityDelayByMountPoint: [String: TimeInterval] = [:],
         forceUnparseableMountOutput: Bool = false,
-        foregroundSSHFS: FakeForegroundSSHFS.Behavior? = nil
+        foregroundSSHFS: FakeForegroundSSHFS.Behavior? = nil,
+        foregroundSSHFSSchedule: [FakeForegroundSSHFS.Behavior] = []
     ) {
         self.connectDelayByMountPoint = connectDelayByMountPoint
         self.connectDelayScheduleByMountPoint = connectDelayScheduleByMountPoint
@@ -1277,6 +1447,7 @@ private actor FakeMountRunner: ProcessRunning {
         self.unmountVisibilityDelayByMountPoint = unmountVisibilityDelayByMountPoint
         self.forceUnparseableMountOutput = forceUnparseableMountOutput
         self.foregroundSSHFS = foregroundSSHFS
+        self.foregroundSSHFSSchedule = foregroundSSHFSSchedule
     }
 
     /// Without `foregroundSSHFS`, sshfs keeps the legacy "exit 0, then mount appears" shape via `run`.
@@ -1286,7 +1457,7 @@ private actor FakeMountRunner: ProcessRunning {
         environment: [String: String]
     ) async throws -> DetachedProcess {
         guard executable.hasSuffix("sshfs"),
-              let behavior = foregroundSSHFS,
+              let behavior = foregroundSSHFSSchedule.isEmpty ? foregroundSSHFS : foregroundSSHFSSchedule.removeFirst(),
               let mountPoint = arguments.last else {
             return RunToCompletionDetachedProcess(
                 runner: self,
@@ -1327,6 +1498,16 @@ private actor FakeMountRunner: ProcessRunning {
         standardInput: String?
     ) async throws -> ProcessResult {
         let startedAt = Date()
+
+        // Exercise the real, bounded filesystem repair commands on isolated test directories.
+        if (executable == "/usr/bin/stat" && arguments.contains("%d:%i:%u:%HT:%Lp"))
+            || (executable == "/usr/bin/find" && arguments.first?.contains("/Library/Caches/macfuseGui-repair-tests-") == true)
+            || executable == "/bin/rmdir" || executable == "/bin/mkdir" {
+            return try await ProcessRunner().run(
+                executable: executable, arguments: arguments, environment: environment,
+                timeout: timeout, standardInput: standardInput
+            )
+        }
 
         if executable.hasSuffix("sshfs"), let mountPoint = arguments.last {
             let delay: TimeInterval
@@ -1395,7 +1576,7 @@ private actor FakeMountRunner: ProcessRunning {
                     .map { "mock@host:/remote mounted at \($0) type fusefs" }
                     .joined(separator: "\n")
             } else {
-                output = points
+                output = "/dev/disk on / (apfs, local)\n" + points
                     .map { "mock@host:/remote on \($0) (fusefs, nodev, nosuid, synchronous)" }
                     .joined(separator: "\n")
             }

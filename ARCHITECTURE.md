@@ -83,6 +83,8 @@ Watchdogs:
 4. Calls `MountManager.connect` with timeout guard.
 5. Applies final state (`connected` or `error`).
 
+A foreground sshfs that stays alive without output or a visible mount is treated as a silent stall. After terminating and confirming exit of that child, `MountManager` may reset an empty local mount directory and retry once with a command timeout capped at 6 seconds. A reset is permitted only after bounded checks confirm a user-owned directory on APFS/HFS, no symlink ancestors, and no mount at or below the path. It is limited to subfolders below the user's home (excluding its immediate children) or direct children of `/Volumes`. The final `rmdir` is non-recursive and fails if contents or an active mount appear. No folder backups or moves occur. If local files are present, the app preserves them, reports how to resolve the conflict, and stops automatic reconnect attempts. A failed retry cannot repeatedly reset the directory; a successful connection re-arms this recovery for a future outage.
+
 `MountCommandBuilder` turns a `RemoteConfig` into sshfs arguments:
 - Auth mode:
   - `SSH Private Key` → `IdentityFile=...`

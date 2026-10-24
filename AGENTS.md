@@ -153,6 +153,7 @@ Connect flow highlights:
 - Pre-connect cleanup if mountpoint already mounted.
 - Auto-create missing local mount folder.
 - Retry once for transient failures (`resource busy`, reset/timeout/network-type failures).
+- A silent foreground sshfs timeout can trigger one empty-local-directory reset and a short (up to 6s) retry. The failed child must have exited first. `MountPointRecovery` uses bounded probes to require an unmounted, user-owned directory on APFS/HFS, with no symlink ancestors, and uses non-recursive `rmdir`/`mkdir`. Automatic reset is limited to subfolders below the user's home (excluding its immediate children) or direct children of `/Volumes`. No backups, moves, or recursive deletion. Local contents are left untouched and produce a localized actionable error that stops auto-reconnect. A successful connection re-arms reset for a later outage.
 - Minimum transition visibility (~0.8s) to keep UI from appearing frozen or skipping states.
 - sshfs runs in the foreground (`-f`) as a detached child from `ProcessRunner.launchDetached`: `posix_spawn` with `POSIX_SPAWN_SETSID` (own session and process group), stdin `/dev/null`, stdout/stderr to a private temp log.
   - Why: macFUSE 5.4+ libfuse no longer forks after the mount has started, and sshfs starts the mount before it daemonizes, so a non-`-f` sshfs never returns control (issue #8).

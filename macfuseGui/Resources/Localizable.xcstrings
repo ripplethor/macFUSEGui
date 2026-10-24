@@ -11238,6 +11238,59 @@
         }
       }
     },
+    "Local mount folder requires attention: %@. It contains local files while unmounted. Move those files or choose an empty local mount folder, then reconnect.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local mount folder requires attention: %@. It contains local files while unmounted. Move those files or choose an empty local mount folder, then reconnect."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokaler Einhängeordner muss überprüft werden: %@. Er enthält lokale Dateien, obwohl er nicht eingehängt ist. Verschieben Sie diese Dateien oder wählen Sie einen leeren lokalen Einhängeordner und verbinden Sie sich erneut."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La carpeta de montaje local requiere atención: %@. Contiene archivos locales estando desmontada. Mueva esos archivos o elija una carpeta de montaje local vacía y vuelva a conectar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dossier de montage local nécessite votre attention : %@. Il contient des fichiers locaux alors qu’il est démonté. Déplacez ces fichiers ou choisissez un dossier de montage local vide, puis reconnectez-vous."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ローカルのマウントフォルダを確認してください: %@。マウントされていない状態でローカルファイルが存在します。それらのファイルを移動するか、空のローカルマウントフォルダを選択してから再接続してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬 마운트 폴더를 확인해야 합니다: %@. 마운트되지 않은 상태에서 로컬 파일이 있습니다. 해당 파일을 이동하거나 비어 있는 로컬 마운트 폴더를 선택한 후 다시 연결하세요."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A pasta de montagem local requer atenção: %@. Ela contém arquivos locais enquanto está desmontada. Mova esses arquivos ou escolha uma pasta de montagem local vazia e conecte novamente."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地挂载文件夹需要处理：%@。该文件夹在未挂载时包含本地文件。请移动这些文件或选择一个空的本地挂载文件夹，然后重新连接。"
+          }
+        }
+      }
+    },
     "Local mount point cannot be '/'. Choose a subfolder.": {
       "extractionState": "manual",
       "localizations": {

@@ -8,6 +8,84 @@
 
 import Foundation
 
+/// Resets only an empty, unmounted local directory. Never moves or deletes its contents.
+enum MountPointRecovery {
+    enum Outcome: Equatable { case reset, containsLocalFiles, unsafe }
+
+    static func localFilesMessage(mountPoint: String) -> String {
+        L10n.format(
+            "Local mount folder requires attention: %@. It contains local files while unmounted. Move those files or choose an empty local mount folder, then reconnect.",
+            LocalPathNormalizer.normalize(mountPoint)
+        )
+    }
+
+    static func resetEmptyDirectory(
+        mountPoint: String, runner: ProcessRunning, diagnostics: DiagnosticsService
+    ) async -> Outcome {
+        let path = LocalPathNormalizer.normalize(mountPoint)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // Do not automatically remove system directories, the home folder, or its immediate children.
+        let inHome = path.hasPrefix(home + "/")
+            && (path as NSString).pathComponents.count >= (home as NSString).pathComponents.count + 2
+        let inVolumes = (path as NSString).deletingLastPathComponent == "/Volumes"
+        guard inHome || inVolumes else { return .unsafe }
+
+        var ancestors = [path]
+        while ancestors.last != "/", let last = ancestors.last {
+            ancestors.append((last as NSString).deletingLastPathComponent)
+        }
+
+        do {
+            try Task.checkCancellation()
+            // stat defaults to lstat: refuse symlinks anywhere in the path. All filesystem work is bounded.
+            let stat = try await runner.run(
+                executable: "/usr/bin/stat", arguments: ["-f", "%d:%i:%u:%HT:%Lp"] + ancestors, timeout: 0.75
+            )
+            let rows = stat.stdout.split(separator: "\n").map { $0.split(separator: ":").map(String.init) }
+            guard !stat.timedOut, stat.exitCode == 0, rows.count == ancestors.count,
+                  rows.allSatisfy({ $0.count == 5 && $0[3] == "Directory" }),
+                  rows[0][0] == rows[1][0], rows[0][2] == String(getuid()),
+                  UInt16(rows[0][4], radix: 8) != nil else { return .unsafe }
+
+            let mounts = try await runner.run(executable: "/sbin/mount", arguments: [], timeout: 0.75)
+            guard !mounts.timedOut, mounts.exitCode == 0 else { return .unsafe }
+            let records = MountStateParser().parseMountOutput(mounts.stdout)
+            // Refuse an active mount at or below this directory, including mounts on another filesystem.
+            guard !records.contains(where: {
+                let mounted = LocalPathNormalizer.normalize($0.mountPoint)
+                return mounted == path || mounted.hasPrefix(path + "/")
+            }), let parentVolume = records.filter({
+                let mounted = LocalPathNormalizer.normalize($0.mountPoint)
+                return mounted == "/" || path.hasPrefix(mounted + "/")
+            }).max(by: { $0.mountPoint.count < $1.mountPoint.count }),
+                ["apfs", "hfs"].contains(parentVolume.filesystemType) else { return .unsafe }
+
+            let entries = try await runner.run(
+                executable: "/usr/bin/find", arguments: [path, "-mindepth", "1", "-maxdepth", "1", "-print", "-quit"],
+                timeout: 0.75
+            )
+            guard !entries.timedOut, entries.exitCode == 0 else { return .unsafe }
+            guard entries.stdout.isEmpty else { return .containsLocalFiles }
+            try Task.checkCancellation()
+            // rmdir is the final atomic safeguard: it fails if the directory gains contents,
+            // becomes a mountpoint, or is replaced by a symlink after the probes above.
+            let remove = try await runner.run(executable: "/bin/rmdir", arguments: [path], timeout: 0.75)
+            guard !remove.timedOut, remove.exitCode == 0 else { return .unsafe }
+            // Recreate even when cancellation arrives just after rmdir, leaving the mount path usable.
+            let mode = rows[0][4]
+            let create = try await Task.detached {
+                try await runner.run(executable: "/bin/mkdir", arguments: ["-m", mode, path], timeout: 0.75)
+            }.value
+            guard !create.timedOut, create.exitCode == 0 else { return .unsafe }
+            diagnostics.append(level: .warning, category: "mount", message: "Reset empty local mount directory after silent sshfs stall: \(path)")
+            return .reset
+        } catch {
+            diagnostics.append(level: .debug, category: "mount", message: "Local mount directory reset skipped for \(path): \(error.localizedDescription)")
+            return .unsafe
+        }
+    }
+}
+
 // MountManager is the low-level mount lifecycle engine.
 // It does not present UI. It only returns structured status and errors.
 // View models decide what to show to users.
@@ -19,6 +97,13 @@ import Foundation
 /// Beginner note: This type groups related state and behavior for one part of the app.
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 actor MountManager {
+    private enum MountAttemptFailure: LocalizedError {
+        case silentStall
+        var errorDescription: String? { L10n.tr("sshfs connect timed out.") }
+    }
+
+    // At most one directory reset per outage. A successful mount permits recovery on a future outage.
+    private var resetAttemptedMountPoints: Set<String> = []
     private enum DirectoryQueryHealth {
         case healthy
         case timedOut
@@ -1045,6 +1130,7 @@ actor MountManager {
     ) async throws -> RemoteStatus {
         var attempt = 0
         var lastError: Error?
+        var commandTimeout = sshfsConnectCommandTimeout
 
         while attempt < 2 {
             try throwIfCancelled()
@@ -1056,11 +1142,32 @@ actor MountManager {
                     password: password,
                     sshfsPath: sshfsPath,
                     updateStoredStatus: true,
-                    operationID: operationID
+                    operationID: operationID,
+                    commandTimeout: commandTimeout
                 )
+                resetAttemptedMountPoints.remove(LocalPathNormalizer.normalize(remote.localMountPoint))
                 return status
             } catch {
                 lastError = error
+                try throwIfCancelled()
+                let mountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
+                if error is MountAttemptFailure, attempt == 1, !resetAttemptedMountPoints.contains(mountPoint) {
+                    let outcome = await MountPointRecovery.resetEmptyDirectory(
+                        mountPoint: mountPoint, runner: runner, diagnostics: diagnostics
+                    )
+                    try throwIfCancelled()
+                    switch outcome {
+                    case .reset:
+                        resetAttemptedMountPoints.insert(mountPoint)
+                        // Keep the retry inside the existing outer connect/watchdog budgets.
+                        commandTimeout = min(sshfsConnectCommandTimeout, 6)
+                        continue
+                    case .containsLocalFiles:
+                        throw AppError.validationFailed([MountPointRecovery.localFilesMessage(mountPoint: mountPoint)])
+                    case .unsafe:
+                        diagnostics.append(level: .warning, category: "mount", message: "Silent sshfs stall at \(mountPoint); could not safely reset the local mount directory.")
+                    }
+                }
                 let message = error.localizedDescription.lowercased()
                 let shouldRetry = message.contains("resource busy")
                     || message.contains("transport endpoint")
@@ -1216,7 +1323,8 @@ actor MountManager {
         password: String?,
         sshfsPath: String,
         updateStoredStatus: Bool,
-        operationID: UUID?
+        operationID: UUID?,
+        commandTimeout: TimeInterval? = nil
     ) async throws -> RemoteStatus {
         try throwIfCancelled()
         let capabilities = await resolveCapabilities(sshfsPath: sshfsPath)
@@ -1246,7 +1354,8 @@ actor MountManager {
                 remote: remote,
                 commandStartedAt: commandStartedAt,
                 updateStoredStatus: updateStoredStatus,
-                operationID: operationID
+                operationID: operationID,
+                commandTimeout: commandTimeout ?? sshfsConnectCommandTimeout
             )
         }
 
@@ -1272,10 +1381,12 @@ actor MountManager {
         remote: RemoteConfig,
         commandStartedAt: Date,
         updateStoredStatus: Bool,
-        operationID: UUID?
+        operationID: UUID?,
+        commandTimeout: TimeInterval
     ) async throws -> RemoteStatus {
         let normalizedMountPoint = LocalPathNormalizer.normalize(remote.localMountPoint)
-        let deadline = commandStartedAt.addingTimeInterval(sshfsConnectCommandTimeout)
+        let deadline = commandStartedAt.addingTimeInterval(commandTimeout)
+        var silentStall = false
 
         func logProbeEnd(timedOut: Bool, exit: String, mounted: Bool) {
             let elapsedMs = Int(Date().timeIntervalSince(commandStartedAt) * 1_000)
@@ -1352,8 +1463,9 @@ actor MountManager {
                     diagnostics.append(
                         level: .warning,
                         category: "mount",
-                        message: "sshfs for \(remote.displayName) was still running without a visible mount after \(Int(sshfsConnectCommandTimeout.rounded()))s. Output: \(output.isEmpty ? "-" : output)"
+                        message: "sshfs for \(remote.displayName) was still running without a visible mount after \(Int(commandTimeout.rounded()))s. Output: \(output.isEmpty ? "-" : output)"
                     )
+                    silentStall = output.isEmpty
                     throw AppError.timeout(L10n.tr("sshfs connect timed out."))
                 }
 
@@ -1362,6 +1474,10 @@ actor MountManager {
         } catch {
             // Never leave a half-connected sshfs behind; it could mount after we reported failure.
             await process.terminate()
+            // Do not touch a directory while a half-connected sshfs could still mount over it.
+            if silentStall, !Task.isCancelled, await process.pollExit() != nil {
+                throw MountAttemptFailure.silentStall
+            }
             throw error
         }
     }

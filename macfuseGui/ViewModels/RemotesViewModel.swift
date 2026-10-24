@@ -2469,6 +2469,8 @@ final class RemotesViewModel: ObservableObject {
             || lower.contains("sshfs is not installed")
             || lower.contains("sshfs backend")
             || lower.contains("macfuse is not installed")
+            // Match the complete localized message, so this also stops retries outside English.
+            || remotes.contains { message == MountPointRecovery.localFilesMessage(mountPoint: $0.localMountPoint) }
     }
 
     private func publishDependencyStatus(_ status: DependencyStatus, announceIfMissing: Bool) {
