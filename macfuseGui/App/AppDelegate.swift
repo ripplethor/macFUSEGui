@@ -25,6 +25,7 @@ extension Notification.Name {
 /// Read stored properties first, then follow methods top-to-bottom to understand flow.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var environment: AppEnvironment?
+    private var showSettingsOnReopen: (() -> Void)?
     private var menuBarController: MenuBarController?
     // NSEvent monitor tokens are opaque Any; store token so it can be removed on termination.
     private var keyboardMonitor: Any?
@@ -38,6 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let maxModalTeardownPasses = 8
     private static let maxSheetTeardownPasses = 8
     private static let singletonLockFileName = "com.visualweb.macfusegui.instance.lock"
+
+    convenience init(showSettingsOnReopen: @escaping () -> Void) {
+        self.init()
+        self.showSettingsOnReopen = showSettingsOnReopen
+    }
 
     /// Beginner note: This method is one step in the feature workflow for this file.
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -78,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let environment = AppEnvironment()
             self.environment = environment
+            self.showSettingsOnReopen = { [controller = environment.settingsWindowController] in
+                controller.showWindow(nil)
+            }
 
             self.menuBarController = MenuBarController(
                 viewModel: environment.remotesViewModel,
@@ -114,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // when the menu bar is full (on notched MacBooks the items next to the notch go first).
         // Showing Settings on an explicit reopen keeps the app reachable in that case.
         if !isTerminating {
-            environment?.settingsWindowController.showWindow(nil)
+            showSettingsOnReopen?()
         }
         // We handled the reopen ourselves; AppKit/SwiftUI should not add their default behavior.
         return false

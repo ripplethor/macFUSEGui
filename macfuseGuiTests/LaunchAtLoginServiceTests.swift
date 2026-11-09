@@ -52,12 +52,51 @@ final class LaunchAtLoginServiceTests: XCTestCase {
         XCTAssertTrue(state.enabled)
         XCTAssertEqual(state.detail, "Enabled via LaunchAgent fallback.")
         XCTAssertTrue(context.fileManager.fileExists(atPath: context.launchAgentPlistURL.path))
+        let plistData = try Data(contentsOf: context.launchAgentPlistURL)
+        let plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any]
+        )
+        XCTAssertEqual(
+            plist["ProgramArguments"] as? [String],
+            ["/usr/bin/open", "-g", "-a", Bundle.main.bundleURL.path, "-u", "macfusegui:launch-at-login"]
+        )
         let didBootstrap = await runner.hasLaunchctlSubcommand("bootstrap")
         let didEnable = await runner.hasLaunchctlSubcommand("enable")
         let didPrint = await runner.hasLaunchctlSubcommand("print")
         XCTAssertTrue(didBootstrap)
         XCTAssertTrue(didEnable)
         XCTAssertTrue(didPrint)
+    }
+
+    func testUpdatesLegacyLaunchAgentWithoutReloadingIt() async throws {
+        let context = try makeContext()
+        defer { try? context.cleanup() }
+        let url = context.launchAgentPlistURL
+        let bundlePath = "/Applications/macFUSEGui Copy.app"
+        let legacy: [String: Any] = [
+            "Label": "com.visualweb.macfusegui.launchagent",
+            "ProgramArguments": ["/usr/bin/open", bundlePath],
+            "RunAtLoad": true
+        ]
+        try context.fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try PropertyListSerialization.data(fromPropertyList: legacy, format: .xml, options: 0)
+        try data.write(to: url)
+        let runner = FakeLaunchctlRunner()
+        let service = LaunchAtLoginService(fileManager: context.fileManager, runner: runner)
+
+        try service.updateLegacyLaunchAgent()
+
+        let updatedData = try Data(contentsOf: url)
+        let updated = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: updatedData, format: nil) as? [String: Any]
+        )
+        XCTAssertEqual(
+            updated["ProgramArguments"] as? [String],
+            ["/usr/bin/open", "-g", "-a", bundlePath, "-u", "macfusegui:launch-at-login"]
+        )
+        XCTAssertEqual(updated["RunAtLoad"] as? Bool, true)
+        let didBootstrap = await runner.hasLaunchctlSubcommand("bootstrap")
+        XCTAssertFalse(didBootstrap)
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

@@ -2,7 +2,11 @@
 
 This project benefits from bug reports, testing, review, and pull requests from the community.
 
-## Unreleased (after v0.1.36)
+## Unreleased
+
+Thanks to @bytepudding for [PR #9](https://github.com/ripplethor/macFUSEGui/pull/9), which makes reopening the running app show Settings when the menu bar icon is hidden.
+
+## After v0.1.36
 
 Thanks to @howardhey for PR #7, which replaced the Homebrew cask's deprecated `depends_on macos: ">= :ventura"` syntax in both the cask and the release script's cask template, so installs and upgrades no longer show a deprecation warning.
 

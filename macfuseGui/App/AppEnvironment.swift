@@ -75,6 +75,15 @@ final class AppEnvironment {
         processRunner = ProcessRunner()
         dependencyChecker = DependencyChecker()
         launchAtLoginService = LaunchAtLoginService(runner: processRunner)
+        do {
+            try launchAtLoginService.updateLegacyLaunchAgent()
+        } catch {
+            diagnosticsService.append(
+                level: .warning,
+                category: "startup",
+                message: "Could not update legacy launch at login: \(error.localizedDescription)"
+            )
+        }
         remoteStore = JSONRemoteStore()
         keychainService = KeychainService()
         validationService = ValidationService()

@@ -3736,6 +3736,27 @@ final class LaunchAtLoginService {
         "gui/\(getuid())"
     }
 
+    func updateLegacyLaunchAgent() throws {
+        let url = launchAgentPlistURL
+        guard fileManager.fileExists(atPath: url.path) else { return }
+
+        let data = try Data(contentsOf: url)
+        guard var plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              plist["Label"] as? String == launchAgentLabel,
+              let arguments = plist["ProgramArguments"] as? [String],
+              arguments.count == 2, arguments[0] == "/usr/bin/open"
+        else { return }
+
+        plist["ProgramArguments"] = backgroundLaunchArguments(bundlePath: arguments[1])
+        let updatedData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try updatedData.write(to: url, options: .atomic)
+    }
+
+    private func backgroundLaunchArguments(bundlePath: String) -> [String] {
+        // Target a URL event at this bundle so a running app never receives a reopen event.
+        ["/usr/bin/open", "-g", "-a", bundlePath, "-u", "macfusegui:launch-at-login"]
+    }
+
     /// Beginner note: This method is one step in the feature workflow for this file.
     /// This can throw an error: callers should use do/try/catch or propagate the error.
     private func enableLaunchAgentFallback() async throws {
@@ -3752,7 +3773,7 @@ final class LaunchAtLoginService {
 
         let plist: [String: Any] = [
             "Label": launchAgentLabel,
-            "ProgramArguments": ["/usr/bin/open", bundlePath],
+            "ProgramArguments": backgroundLaunchArguments(bundlePath: bundlePath),
             "RunAtLoad": true,
             "KeepAlive": false,
             "LimitLoadToSessionType": "Aqua"

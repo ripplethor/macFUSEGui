@@ -41,6 +41,7 @@ Why this exists:
 Reopen:
 - Opening the same app bundle again while it runs sends a reopen event to the running instance, and `applicationShouldHandleReopen` shows the Settings window. A different copy of the app goes through the duplicate-instance path instead.
 - This is the way back in when macOS hides the status item on a full menu bar. A fresh launch never opens Settings.
+- The LaunchAgent fallback targets a background URL open at the app bundle so it can start the app without delivering a reopen event to a running instance.
 
 ## 3) State Ownership
 

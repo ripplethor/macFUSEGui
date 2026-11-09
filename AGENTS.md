@@ -67,7 +67,7 @@ Reopen behavior:
 - `applicationShouldHandleReopen` shows the Settings window and returns `false`, so AppKit/SwiftUI add no default reopen handling. It does nothing during termination or before `AppEnvironment` exists.
 - Why: the status item is the only other entry point, and macOS hides it without notifying the app when the menu bar is full. On notched MacBooks the items next to the notch go first.
 - A fresh launch, including launch at login, never opens Settings.
-- Caveat: the LaunchAgent fallback runs `/usr/bin/open <bundle>`. If it fires while the app is already running, that is a reopen and Settings opens.
+- The LaunchAgent fallback uses a background URL open targeted at the app bundle. LaunchServices delivers a URL event instead of a reopen event, so a running instance keeps its current windows.
 
 Quit hardening (`forceQuit`):
 - Posts `.forceQuitRequested` so SwiftUI sheets/panels close themselves.
@@ -544,6 +544,7 @@ Fallback path:
 - LaunchAgent plist at `~/Library/LaunchAgents/com.visualweb.macfusegui.launchagent.plist`
 - `launchctl` bootstrap/enable/bootout flows
 - Used when SMAppService registration is unavailable or not taking effect
+- App startup updates the arguments of older fallback plists on disk. An already-loaded job picks up the new arguments the next time it is loaded.
 
 UI state:
 - `LaunchAtLoginState` includes `enabled`, `requiresApproval`, `detail`
