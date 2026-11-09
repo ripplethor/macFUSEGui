@@ -106,9 +106,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         releaseSingletonLock()
     }
 
-    /// Beginner note: This method is one step in the feature workflow for this file.
+    /// Beginner note: macOS calls this when the user opens the app again while it is already running
+    /// (Finder, Spotlight, Launchpad, `open`). LaunchServices sends a reopen event to this process
+    /// instead of starting a second instance. A fresh launch never gets here.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        false
+        // The status item is the only other way into the app, and macOS hides it without telling us
+        // when the menu bar is full (on notched MacBooks the items next to the notch go first).
+        // Showing Settings on an explicit reopen keeps the app reachable in that case.
+        if !isTerminating {
+            environment?.settingsWindowController.showWindow(nil)
+        }
+        // We handled the reopen ourselves; AppKit/SwiftUI should not add their default behavior.
+        return false
     }
 
     /// Beginner note: This method is one step in the feature workflow for this file.

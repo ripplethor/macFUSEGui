@@ -30,13 +30,17 @@ Main service layers:
 
 `AppDelegate.applicationDidFinishLaunching` does four critical things before normal app setup:
 1. Skips full startup when running under XCTest host.
-2. Acquires singleton lock file (`/tmp/com.visualweb.macfusegui.instance.lock`) with `flock`.
+2. Acquires singleton lock file (`com.visualweb.macfusegui.instance.lock` in the per-user `NSTemporaryDirectory()`) with `flock`.
 3. Detects duplicate app instances (bundle ID, executable name, localized name) and activates old instance.
 4. Terminates duplicate current process when needed.
 
 Why this exists:
 - Prevent duplicate status bar icons.
 - Prevent test-host processes from creating real menu UI or recovery timers.
+
+Reopen:
+- Opening the same app bundle again while it runs sends a reopen event to the running instance, and `applicationShouldHandleReopen` shows the Settings window. A different copy of the app goes through the duplicate-instance path instead.
+- This is the way back in when macOS hides the status item on a full menu bar. A fresh launch never opens Settings.
 
 ## 3) State Ownership
 

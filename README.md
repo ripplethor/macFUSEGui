@@ -342,6 +342,13 @@ Then in VS Code:
 - Use `Copy Diagnostics` from the app menu.
 - For busy unmount, diagnostics now include blocking process hints.
 
+### Menu bar icon is missing
+
+macOS hides menu bar icons that do not fit, starting with the ones next to the notch on MacBooks. The app keeps running.
+
+- Open `macfuseGui` again from Applications, Spotlight, or Launchpad. The running app opens its Settings window, which lists remotes with Connect and Disconnect.
+- To get the icon back, free up menu bar space: quit or hide other menu bar apps, or ⌘-drag system icons out of the menu bar.
+
 ### Duplicate menu icon or stale second app process
 
 ```bash

@@ -52,7 +52,7 @@ Startup (`AppDelegate.applicationDidFinishLaunching`):
    - `runStartupAutoConnect()`
 
 Duplicate-instance protection (startup hardening):
-- App acquires a singleton lock file at `/tmp/com.visualweb.macfusegui.instance.lock` using `flock`.
+- App acquires a singleton lock file `com.visualweb.macfusegui.instance.lock` in the per-user temp directory (`NSTemporaryDirectory()`, not `/tmp`) using `flock`.
 - App also checks already running apps by bundle ID, executable name, and localized app name.
 - If another real instance is already alive, current process activates the existing instance and terminates.
 - Xcode `DerivedData` test-host processes are excluded from duplicate-instance matching.
@@ -62,8 +62,12 @@ XCTest host guard:
 - This prevents test-host launches from creating extra menu bar status items or starting recovery loops.
 
 Reopen behavior:
-- `applicationShouldHandleReopen` returns `false`.
-- Settings never auto-open on launch or reopen.
+- Opening the same app bundle again while it runs (Finder, Spotlight, Launchpad, `open`) makes LaunchServices send a reopen event to the running instance. No second process starts.
+- Opening a different copy of the app (another path, same bundle ID) starts a second process instead. The duplicate-instance guard activates the running instance and exits, and Settings does not open.
+- `applicationShouldHandleReopen` shows the Settings window and returns `false`, so AppKit/SwiftUI add no default reopen handling. It does nothing during termination or before `AppEnvironment` exists.
+- Why: the status item is the only other entry point, and macOS hides it without notifying the app when the menu bar is full. On notched MacBooks the items next to the notch go first.
+- A fresh launch, including launch at login, never opens Settings.
+- Caveat: the LaunchAgent fallback runs `/usr/bin/open <bundle>`. If it fires while the app is already running, that is a reopen and Settings opens.
 
 Quit hardening (`forceQuit`):
 - Posts `.forceQuitRequested` so SwiftUI sheets/panels close themselves.
@@ -326,7 +330,7 @@ Favorite remotes:
 ## 10) Settings, Editor, and UX Nuances
 
 Settings window:
-- Explicit open only from menu action.
+- Opens only on explicit user action: the menu's Settings action, or reopening the running app (§3).
 - Shows launch-at-login state, including approval/fallback details.
 - Optional custom sshfs path override field (see §6 backend resolution).
 - Includes entry point button that opens a dedicated `Editor Plugins` window.
@@ -689,3 +693,4 @@ Tests:
 29. Route new user-facing strings through `L10n`; keep diagnostics log messages unlocalized.
 30. Keep `-f` in `MountCommandBuilder` and launch sshfs through `ProcessRunning.launchDetached`. Do not go back to waiting for sshfs to exit, and do not run the mount through Foundation `Process`: the child would share the app's process group, where launchd's job cleanup can kill it.
 31. Only signal a detached process group while its leader is unreaped (`SpawnedDetachedProcess.exitState` uses `WNOWAIT`), so a reused PID is never signalled.
+32. Keep reopen showing the Settings window and returning `false`. It is the way back into the app when macOS hides the status item. Never open Settings on a fresh launch.
